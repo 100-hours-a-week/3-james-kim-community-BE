@@ -10,7 +10,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none # validate
     properties:
       hibernate:
         format_sql: true
@@ -20,3 +20,9 @@ logging:
   level:
     org.hibernate.SQL: debug
 #    org.springframework.security: debug
+
+# JWT 설정 추가
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-validity: 3600000  # 1시간 (밀리초) - 임시
+  refresh-token-validity: 604800000  # 7일 (밀리초) - 임시
