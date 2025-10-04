@@ -2,6 +2,7 @@ package ktb.cloud_james.community.global.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -121,5 +122,9 @@ public class JwtTokenProvider {
         }
 
         return false;
+    }
+
+    public long getRefreshTokenValidity() {
+        return this.refreshTokenValidity;
     }
 }

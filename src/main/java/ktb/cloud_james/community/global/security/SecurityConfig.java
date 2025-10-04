@@ -3,6 +3,7 @@ package ktb.cloud_james.community.global.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -49,7 +50,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 회원가입, 로그인은 누구나 접근 가능
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/users").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users").permitAll() // 회원가입만
+                        .requestMatchers(HttpMethod.POST, "/api/images").permitAll() // 이미지 업로드만
+                        .requestMatchers("/temp/**", "/images/**").permitAll() // 정적 리소스
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()
                 )

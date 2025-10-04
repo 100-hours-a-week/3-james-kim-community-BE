@@ -2,6 +2,7 @@ package ktb.cloud_james.community.global.exception;
 
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -49,6 +50,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(errorMessage));
+    }
+
+    /**
+     * DB 제약조건 위반 예외 처리
+     * - UNIQUE KEY 중복 등
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
+            DataIntegrityViolationException e) {
+
+        log.error("DB 제약조건 위반", e);
+
+        String message = e.getMessage();
+
+        // 이메일 중복 (UNIQUE KEY: uk_users_email)
+        if (message != null && message.contains("uk_users_email")) {
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("email_already_exists"));
+        }
+
+        // 닉네임 중복 (UNIQUE KEY: uk_users_nickname)
+        if (message != null && message.contains("uk_users_nickname")) {
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("nickname_already_exists"));
+        }
+
+        // 그 외 제약조건 위반
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("invalid_request"));
     }
 
     /**

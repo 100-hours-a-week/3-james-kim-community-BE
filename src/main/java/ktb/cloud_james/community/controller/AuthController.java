@@ -1,23 +1,21 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.auth.EmailCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
+import ktb.cloud_james.community.dto.auth.TokenDto;
+import ktb.cloud_james.community.dto.auth.TokenRefreshRequestDto;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 인증(Authentication) 관련 API 컨트롤러
- * - 중복 체크 등
- *
- * @RequestMapping: 기본 URL 경로 /api/auth
+ * - 중복 체크, 토큰 갱신 등
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -60,8 +58,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<NicknameCheckResponseDto>> checkNickname(
             @RequestParam String nickname) {
 
-        log.info("GET /api/auth/check-nickname - nickname: {}", nickname);
-
         NicknameCheckResponseDto response = authService.checkNicknameAvailability(nickname);
 
         // 닉네임이 이미 존재하면 409 Conflict 반환
@@ -73,5 +69,15 @@ public class AuthController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("nickname_available", response));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenDto>> refreshToken(
+            @Valid @RequestBody TokenRefreshRequestDto request) {
+
+        TokenDto tokens = authService.refreshAccessToken(request.getRefreshToken());
+
+        return ResponseEntity
+                .ok(ApiResponse.success("token_refreshed", tokens));
     }
 }

@@ -1,0 +1,16 @@
+package ktb.cloud_james.community.repository;
+
+import ktb.cloud_james.community.entity.User;
+import ktb.cloud_james.community.entity.UserToken;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface UserTokenRepository extends JpaRepository<UserToken, Long> {
+
+    Optional<UserToken> findByRefreshToken(String refreshToken);
+
+    Optional<UserToken> findByUser(User user);
+}

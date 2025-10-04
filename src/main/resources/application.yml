@@ -10,11 +10,18 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: none # validate
+      ddl-auto: none # validate  INT UNSIGNED + Long 조합 사용
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
+
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB      # 파일 하나당 최대 크기
+      max-request-size: 5MB   # 요청 전체 최대 크기
 
 logging:
   level:
@@ -26,3 +33,9 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-validity: 3600000  # 1시간 (밀리초) - 임시
   refresh-token-validity: 604800000  # 7일 (밀리초) - 임시
+
+# 파일 저장 경로
+file:
+  temp-dir: uploads/temp      # 임시 디렉토리 (24시간 후 자동 삭제)
+  upload-dir: uploads/images  # 정식 디렉토리 (영구 보관)
+  max-size: 5242880           # 5MB (바이트)
