@@ -1,10 +1,7 @@
 package ktb.cloud_james.community.controller;
 
 import jakarta.validation.Valid;
-import ktb.cloud_james.community.dto.auth.EmailCheckResponseDto;
-import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
-import ktb.cloud_james.community.dto.auth.TokenDto;
-import ktb.cloud_james.community.dto.auth.TokenRefreshRequestDto;
+import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.service.AuthService;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 인증(Authentication) 관련 API 컨트롤러
- * - 중복 체크, 토큰 갱신 등
+ * - 중복 체크, 토큰 갱신, 로그인 등
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -24,6 +21,19 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+
+    /**
+     * 로그인 API
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<LoginResponseDto>> login(
+            @Valid @RequestBody LoginRequestDto request) {
+
+        LoginResponseDto response = authService.login(request);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("login_success", response));
+    }
 
     /**
      * 이메일 중복 체크 API

@@ -38,6 +38,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
+    private final AuthService authService;
 
     /**
      * 회원가입 처리 흐름:
@@ -100,7 +101,7 @@ public class UserService {
             TokenDto tokens = generateTokens(savedUser.getId());
 
             // 8. Refresh Token DB 저장
-            saveRefreshToken(savedUser, tokens.getRefreshToken());
+            authService.saveRefreshToken(savedUser, tokens.getRefreshToken());
 
             log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
@@ -123,31 +124,5 @@ public class UserService {
         log.debug("토큰 생성 완료 - userId: {}", userId);
 
         return new TokenDto(accessToken, refreshToken);
-    }
-
-    /**
-     * Refresh Token DB 저장
-     * - 기존 토큰 있으면 삭제 후 새로 저장
-     * - 한 유저당 하나의 Refresh Token만 유지 (우선 단일 기기로 설정)
-     */
-    private void saveRefreshToken(User user, String refreshToken) {
-        // Refresh Token 만료 시간 계산
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusSeconds(jwtTokenProvider.getRefreshTokenValidity() / 1000);
-
-        // 기존 토큰 있으면 삭제
-        userTokenRepository.findByUser(user)
-                .ifPresent(userTokenRepository::delete);
-
-        // 새 Refresh Token 저장
-        UserToken userToken = UserToken.builder()
-                .user(user)
-                .refreshToken(refreshToken)
-                .expiresAt(expiresAt)
-                .build();
-
-        userTokenRepository.save(userToken);
-
-        log.debug("Refresh Token 저장 완료 - userId: {}", user.getId());
     }
 }

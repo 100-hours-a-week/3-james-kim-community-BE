@@ -9,7 +9,7 @@ import java.io.File;
 
 /**
  * 임시 파일 정리 스케줄러 (회원가입 중)
- * - 1시간 지난 임시 파일 자동 삭제
+ * - 6시간 지난 임시 파일 자동 삭제
  */
 @Component
 @Slf4j
@@ -30,8 +30,8 @@ public class FileCleanupScheduler {
             return;
         }
 
-        // 1시간 전 시간 계산
-        long cutoffTime = System.currentTimeMillis() - (60 * 60 * 1000);
+        // 6시간 전 시간 계산
+        long cutoffTime = System.currentTimeMillis() - (6 * 60 * 60 * 1000);
 
         int deletedCount = 0;
         long deletedSize = 0;

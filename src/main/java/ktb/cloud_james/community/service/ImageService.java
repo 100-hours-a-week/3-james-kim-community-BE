@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -186,7 +187,7 @@ public class ImageService {
                 log.info("파일 삭제 완료 - url: {}", imageUrl);
             }
         } catch (IOException e) {
-            log.error("파일 삭제 실패 (고아 파일 발생) - url: {}", imageUrl, e);
+            log.error("[ORPHAN_FILE] 파일 삭제 실패 (고아 파일 발생) - url: {}", imageUrl, e);
             // 고아 파일은 별도 배치 작업이나 스케줄러로 정리
         }
     }

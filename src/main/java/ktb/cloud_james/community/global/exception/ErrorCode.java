@@ -26,7 +26,8 @@ public enum ErrorCode {
     UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "unsupported_file_type"),
     IMAGE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "image_upload_failed"),
 
-    // ========== 토큰 관련 ==========
+    // ========== 인증 관련 ==========
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "invalid_credentials"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "unauthorized"),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "invalid_token"),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "token_expired");
