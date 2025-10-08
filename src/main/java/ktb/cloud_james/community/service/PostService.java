@@ -3,6 +3,7 @@ package ktb.cloud_james.community.service;
 
 import ktb.cloud_james.community.dto.post.PostCreateRequestDto;
 import ktb.cloud_james.community.dto.post.PostCreateResponseDto;
+import ktb.cloud_james.community.dto.post.PostListResponseDto;
 import ktb.cloud_james.community.entity.Post;
 import ktb.cloud_james.community.entity.PostImage;
 import ktb.cloud_james.community.entity.PostStats;
@@ -17,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * 게시글 관련 비즈니스 로직
@@ -33,6 +36,8 @@ public class PostService {
     private final PostImageRepository postImageRepository;
     private final UserRepository userRepository;
     private final ImageService imageService;
+
+    private static final int DEFAULT_PAGE_SIZE = 20; // 최초 기본 페이지 크기
 
     /**
      * 게시글 작성 처리 흐름:
@@ -106,5 +111,44 @@ public class PostService {
             }
             throw e;
         }
+    }
+
+    /**
+     * 게시글 목록 조회 (인피니티 스크롤)
+     */
+    public PostListResponseDto getPostList(Long lastSeenId, Integer limit, Long currentUserId) {
+        log.info("게시글 목록 조회 - lastSeenId: {}, limit: {}, userId: {}",
+                lastSeenId, limit, currentUserId);
+
+        // 페이지 크기 설정 (null이면 기본값)
+        int pageSize = (limit != null && limit > 0) ? limit : DEFAULT_PAGE_SIZE;
+
+        // 게시글 조회 (limit + 1개 조회하여 hasNext 판별)
+        List<PostListResponseDto.PostSummaryDto> posts =
+                postRepository.findPostsWithCursor(lastSeenId, pageSize, currentUserId);
+
+        // hasNext 판별
+        boolean hasNext = posts.size() > pageSize;
+        if (hasNext) {
+            posts = posts.subList(0, pageSize);
+        }
+
+        // 다음 커서 값 (마지막 게시글 ID)
+        Long nextCursor = posts.isEmpty() ? null : posts.get(posts.size() - 1).getPostId();
+
+        // 페이징 정보 생성
+        PostListResponseDto.PaginationInfo pagination = PostListResponseDto.PaginationInfo.builder()
+                .lastSeenId(nextCursor)
+                .hasNext(hasNext)
+                .limit(pageSize)
+                .sort("latest")
+                .build();
+
+        log.info("게시글 목록 조회 완료 - 조회된 게시글: {}개, hasNext: {}", posts.size(), hasNext);
+
+        return PostListResponseDto.builder()
+                .posts(posts)
+                .pagination(pagination)
+                .build();
     }
 }
