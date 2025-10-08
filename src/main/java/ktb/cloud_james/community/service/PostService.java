@@ -3,6 +3,7 @@ package ktb.cloud_james.community.service;
 
 import ktb.cloud_james.community.dto.post.PostCreateRequestDto;
 import ktb.cloud_james.community.dto.post.PostCreateResponseDto;
+import ktb.cloud_james.community.dto.post.PostDetailResponseDto;
 import ktb.cloud_james.community.dto.post.PostListResponseDto;
 import ktb.cloud_james.community.entity.Post;
 import ktb.cloud_james.community.entity.PostImage;
@@ -36,6 +37,7 @@ public class PostService {
     private final PostImageRepository postImageRepository;
     private final UserRepository userRepository;
     private final ImageService imageService;
+    private final ViewCountCacheService viewCountCacheService;
 
     private static final int DEFAULT_PAGE_SIZE = 20; // 최초 기본 페이지 크기
 
@@ -149,6 +151,52 @@ public class PostService {
         return PostListResponseDto.builder()
                 .posts(posts)
                 .pagination(pagination)
+                .build();
+    }
+
+    /**
+     * 게시글 상세 조회 처리 흐름:
+     * 1. 게시글 조회
+     * 2. 조회수 증가 (캐시만 업데이트)
+     * 3. 캐시된 조회수를 응답에 반영
+     */
+    public PostDetailResponseDto getPostDetail(Long postId, Long currentUserId) {
+        log.info("게시글 상세 조회 - postId: {}, userId: {}", postId, currentUserId);
+
+        // 1. 게시글 조회
+        PostDetailResponseDto post = postRepository.findPostDetail(postId, currentUserId)
+                .orElseThrow(() -> {
+                    log.warn("게시글 조회 실패 - postId: {} (존재하지 않거나 삭제됨)", postId);
+                    return new CustomException(ErrorCode.POST_NOT_FOUND);
+                });
+
+        // 2. 조회수 증가 (인메모리 캐시만 업데이트, DB는 스케줄러가 동기화)
+        Long cachedViewCount = viewCountCacheService.incrementViewCount(postId);
+
+        // 3. 응답 DTO에 반영 (DB값 + 캐시 증가분)
+        PostDetailResponseDto.StatsInfo updatedStats = PostDetailResponseDto.StatsInfo.builder()
+                .likeCount(post.getStats().getLikeCount())
+                .commentCount(post.getStats().getCommentCount())
+                .viewCount(post.getStats().getViewCount() + cachedViewCount)
+                .build();
+
+        log.info("게시글 상세 조회 완료 - postId: {}, 조회수: {} (DB: {}, 캐시: +{})",
+                postId,
+                updatedStats.getViewCount(),
+                post.getStats().getViewCount(),
+                cachedViewCount);
+
+        return PostDetailResponseDto.builder()
+                .postId(post.getPostId())
+                .title(post.getTitle())
+                .content(post.getContent())
+                .imageUrl(post.getImageUrl())
+                .createdAt(post.getCreatedAt())
+                .updatedAt(post.getUpdatedAt())
+                .author(post.getAuthor())
+                .stats(updatedStats)
+                .isLiked(post.getIsLiked())
+                .isAuthor(post.getIsAuthor())
                 .build();
     }
 }

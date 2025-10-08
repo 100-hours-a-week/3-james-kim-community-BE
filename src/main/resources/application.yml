@@ -40,3 +40,9 @@ file:
   temp-dir: uploads/temp      # 임시 디렉토리 (24시간 후 자동 삭제)
   upload-dir: uploads/images  # 정식 디렉토리 (영구 보관)
   max-size: 5242880           # 5MB (바이트)
+
+# ✅ 스케줄러 설정
+scheduler:
+  view-count-sync:
+    enabled: true
+    fixed-delay: 30000  # 30초 (밀리초)

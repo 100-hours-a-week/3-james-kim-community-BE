@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @EnableScheduling: 스케줄링 기능 활성화
  * - @Scheduled 어노테이션 사용 가능
  * - FileCleanupScheduler의 배치 작업 실행
+ * - ViewCountCacheService의 주기적 동기화 실행
  */
 @SpringBootApplication
 @EnableScheduling

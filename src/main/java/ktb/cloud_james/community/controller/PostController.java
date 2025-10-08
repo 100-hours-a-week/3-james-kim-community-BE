@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.dto.post.PostCreateRequestDto;
 import ktb.cloud_james.community.dto.post.PostCreateResponseDto;
+import ktb.cloud_james.community.dto.post.PostDetailResponseDto;
 import ktb.cloud_james.community.dto.post.PostListResponseDto;
 import ktb.cloud_james.community.service.PostService;
 import lombok.Getter;
@@ -64,5 +65,19 @@ public class PostController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("posts_retrieved", response));
+    }
+
+    /**
+     * 게시글 상세 조회 API
+     */
+    @GetMapping("/{postId}")
+    public ResponseEntity<ApiResponse<PostDetailResponseDto>> getPostDetail(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        PostDetailResponseDto response = postService.getPostDetail(postId, userId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("post_retrieved", response));
     }
 }

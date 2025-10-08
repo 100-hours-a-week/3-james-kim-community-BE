@@ -1,17 +1,21 @@
 package ktb.cloud_james.community.repository;
 
+import com.querydsl.core.types.Expression;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import ktb.cloud_james.community.dto.post.PostDetailResponseDto;
 import ktb.cloud_james.community.dto.post.PostListResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import static ktb.cloud_james.community.entity.QPost.post;
 import static ktb.cloud_james.community.entity.QPostStats.postStats;
 import static ktb.cloud_james.community.entity.QUser.user;
+import static ktb.cloud_james.community.entity.QPostImage.postImage;
 import static ktb.cloud_james.community.entity.QPostLike.postLike;
 
 /**
@@ -57,6 +61,49 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
     }
 
     /**
+     * 게시글 상세 조회 특징:
+     * - 단일 쿼리로 모든 데이터 조회 (N+1 방지)
+     * - 작성자, 통계, 이미지, 좋아요 여부 모두 JOIN
+     * - 조회수는 캐시 값 사용 (DB 값 + 캐시 값)
+     */
+    @Override
+    public Optional<PostDetailResponseDto> findPostDetail(Long postId, Long currentUserId) {
+        PostDetailResponseDto result = queryFactory
+                .select(Projections.constructor(
+                        PostDetailResponseDto.class,
+                        post.id,
+                        post.title,
+                        post.content,
+                        getMainImageUrl(),
+                        post.createdAt,
+                        post.updatedAt,
+                        Projections.constructor( // 작성자 정보
+                                PostDetailResponseDto.AuthorInfo.class,
+                                user.nickname,
+                                user.imageUrl
+                        ),
+                        Projections.constructor( // 통계 정보
+                                PostDetailResponseDto.StatsInfo.class,
+                                postStats.likeCount,
+                                postStats.commentCount,
+                                postStats.viewCount
+                        ),
+                        isLikedByUser(currentUserId),
+                        post.user.id.eq(currentUserId)
+                ))
+                .from(post)
+                .join(post.user, user)
+                .join(postStats).on(postStats.postId.eq(post.id))
+                .where(
+                        post.id.eq(postId),
+                        post.deletedAt.isNull()  // 삭제된 게시글 제외
+                )
+                .fetchOne();  // 단일 결과 (없으면 null)
+
+        return Optional.ofNullable(result);
+    }
+
+    /**
      * 커서 조건
      * 커서 기반 페이징 동작 원리:
      * - lastSeenId == null: 첫 페이지 조회 (모든 게시글 대상)
@@ -85,5 +132,20 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                         postLike.user.id.eq(userId)
                 )
                 .exists();
+    }
+
+    /**
+     * 메인 이미지 URL 조회
+     */
+    private Expression<String> getMainImageUrl() {
+        return queryFactory
+                .select(postImage.imageUrl)
+                .from(postImage)
+                .where(
+                        postImage.post.id.eq(post.id),
+                        postImage.isMain.isTrue(),
+                        postImage.deletedAt.isNull()
+                )
+                .limit(1);
     }
 }

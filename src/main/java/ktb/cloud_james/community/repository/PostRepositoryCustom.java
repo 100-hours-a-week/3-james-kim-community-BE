@@ -1,8 +1,10 @@
 package ktb.cloud_james.community.repository;
 
+import ktb.cloud_james.community.dto.post.PostDetailResponseDto;
 import ktb.cloud_james.community.dto.post.PostListResponseDto;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Post 커스텀 Repository
@@ -22,4 +24,7 @@ public interface PostRepositoryCustom {
             int limit,
             Long currentUserId
     );
+
+    // 게시글 상세 조회 (단일 게시글)
+    Optional<PostDetailResponseDto> findPostDetail(Long postId, Long currentUserId);
 }
