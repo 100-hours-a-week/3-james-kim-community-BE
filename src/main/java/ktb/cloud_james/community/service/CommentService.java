@@ -1,8 +1,6 @@
 package ktb.cloud_james.community.service;
 
-import ktb.cloud_james.community.dto.comment.CommentCreateRequestDto;
-import ktb.cloud_james.community.dto.comment.CommentCreateResponseDto;
-import ktb.cloud_james.community.dto.comment.CommentListResponseDto;
+import ktb.cloud_james.community.dto.comment.*;
 import ktb.cloud_james.community.entity.Comment;
 import ktb.cloud_james.community.entity.Post;
 import ktb.cloud_james.community.entity.PostStats;
@@ -153,10 +151,10 @@ public class CommentService {
             comments = comments.subList(0, pageSize);
         }
 
-        // 5. 다음 커서 값 (마지막 댓글 ID)
+        // 다음 커서 값 (마지막 댓글 ID)
         Long nextCursor = comments.isEmpty() ? null : comments.get(comments.size() - 1).getCommentId();
 
-        // 6. 페이징 정보 생성
+        // 페이징 정보 생성
         CommentListResponseDto.PaginationInfo pagination = CommentListResponseDto.PaginationInfo.builder()
                 .lastSeenId(nextCursor)
                 .hasNext(hasNext)
@@ -169,5 +167,57 @@ public class CommentService {
                 .comments(comments)
                 .pagination(pagination)
                 .build();
+    }
+
+    /**
+     * 댓글 수정 처리 흐름:
+     * 1. 댓글 조회 (존재 확인)
+     * 2. 삭제된 댓글 체크
+     * 3. 작성자 권한 확인
+     * 4. 댓글 내용 수정 (JPA Dirty Checking)
+     * 5. 응답 DTO 생성
+     */
+    @Transactional
+    public CommentUpdateResponseDto updateComment(
+            Long userId,
+            Long postId,
+            Long commentId,
+            CommentUpdateRequestDto request
+    ) {
+        log.info("댓글 수정 시도 - userId: {}, postId: {}, commentId: {}", userId, postId, commentId);
+
+        // 1. 댓글 조회
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> {
+                    log.warn("댓글 수정 실패 - 존재하지 않는 댓글: commentId={}", commentId);
+                    return new CustomException(ErrorCode.COMMENT_NOT_FOUND);
+                });
+
+        // 2. 삭제된 댓글 체크
+        if (comment.getDeletedAt() != null) {
+            log.warn("댓글 수정 실패 - 삭제된 댓글: commentId={}", commentId);
+            throw new CustomException(ErrorCode.COMMENT_NOT_FOUND);
+        }
+
+        // 3. 게시글 ID 일치 확인 (URL의 postId와 댓글의 postId 비교)
+        if (!comment.getPost().getId().equals(postId)) {
+            log.warn("댓글 수정 실패 - 게시글 불일치: commentId={}, urlPostId={}, actualPostId={}",
+                    commentId, postId, comment.getPost().getId());
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        // 4. 작성자 권한 확인
+        if (!comment.getUser().getId().equals(userId)) {
+            log.warn("댓글 수정 실패 - 권한 없음: userId={}, commentId={}, authorId={}",
+                    userId, commentId, comment.getUser().getId());
+            throw new CustomException(ErrorCode.NOT_COMMENT_AUTHOR);
+        }
+
+        // 5. 댓글 내용 수정 (JPA Dirty Checking으로 자동 UPDATE)
+        comment.updateContent(request.getContent());
+
+        log.info("댓글 수정 완료 - commentId: {}", commentId);
+
+        return new CommentUpdateResponseDto(commentId);
     }
 }

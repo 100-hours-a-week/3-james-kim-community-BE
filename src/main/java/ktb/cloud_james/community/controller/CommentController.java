@@ -1,9 +1,7 @@
 package ktb.cloud_james.community.controller;
 
 import jakarta.validation.Valid;
-import ktb.cloud_james.community.dto.comment.CommentCreateRequestDto;
-import ktb.cloud_james.community.dto.comment.CommentCreateResponseDto;
-import ktb.cloud_james.community.dto.comment.CommentListResponseDto;
+import ktb.cloud_james.community.dto.comment.*;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.service.CommentService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +23,9 @@ public class CommentController {
 
     private final CommentService commentService;
 
+    /**
+     * 댓글 작성 API
+     */
     @PostMapping
     public ResponseEntity<ApiResponse<CommentCreateResponseDto>> createComment(
             @PathVariable Long postId,
@@ -58,4 +59,22 @@ public class CommentController {
         return ResponseEntity
                 .ok(ApiResponse.success("comments_retrieved", response));
     }
+
+    /**
+     * 댓글 수정 API
+     */
+    @PutMapping("/{commentId}")
+    public ResponseEntity<ApiResponse<CommentUpdateResponseDto>> updateComment(
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody CommentUpdateRequestDto request
+    ) {
+
+        CommentUpdateResponseDto response = commentService.updateComment(userId, postId, commentId, request);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("comment_updated", response));
+    }
+
 }

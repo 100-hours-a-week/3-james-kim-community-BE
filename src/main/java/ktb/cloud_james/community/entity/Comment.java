@@ -59,4 +59,10 @@ public class Comment {
         this.user = user;
         this.content = content;
     }
+
+    // ========== 비즈니스 로직 ==========
+
+    public void updateContent(String content) {
+        this.content = content;
+    }
 }
