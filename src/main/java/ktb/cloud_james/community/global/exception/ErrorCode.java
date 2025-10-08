@@ -37,7 +37,11 @@ public enum ErrorCode {
     NOT_POST_AUTHOR(HttpStatus.FORBIDDEN, "not_post_author"),
 
     // ========== 사용자 관련 ==========
-    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "user_not_found");
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "user_not_found"),
+
+    // ========== 댓글 관련 ==========
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "comment_not_found"),
+    NOT_COMMENT_AUTHOR(HttpStatus.FORBIDDEN, "not_comment_author");
 
     private final HttpStatus status;
 

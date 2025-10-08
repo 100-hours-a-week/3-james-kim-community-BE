@@ -16,4 +16,8 @@ public interface PostStatsRepository extends JpaRepository<PostStats, Long> {
     @Query("UPDATE PostStats ps SET ps.viewCount = ps.viewCount + :count WHERE ps.postId = :postId")
     int incrementViewCount(@Param("postId") Long postId, @Param("count") Long count);
 
+    // 댓글수 증가 (원자적 연산)
+    @Modifying
+    @Query("UPDATE PostStats ps SET ps.commentCount = ps.commentCount + 1 WHERE ps.postId = :postId")
+    int incrementCommentCount(@Param("postId") Long postId);
 }
