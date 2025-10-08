@@ -30,7 +30,14 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "invalid_credentials"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "unauthorized"),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "invalid_token"),
-    TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "token_expired");
+    TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "token_expired"),
+
+    // ========== 게시글 관련 ==========
+    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "post_not_found"),
+    NOT_POST_AUTHOR(HttpStatus.FORBIDDEN, "not_post_author"),
+
+    // ========== 사용자 관련 ==========
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "user_not_found");
 
     private final HttpStatus status;
 

@@ -4,7 +4,6 @@ import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
 import ktb.cloud_james.community.dto.auth.TokenDto;
 import ktb.cloud_james.community.entity.User;
-import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
@@ -16,7 +15,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 
 /**
  * 사용자(User) 관련 비즈니스 로직
@@ -34,7 +32,6 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final UserTokenRepository userTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
@@ -112,7 +109,10 @@ public class UserService {
 
         } catch (Exception e) {
             // DB 저장 실패 시 이미지 삭제 시도 (Best Effort)
-            imageService.deleteFile(finalImageUrl);
+            if (finalImageUrl != null) {
+                imageService.deleteFile(finalImageUrl);
+                log.error("회원가입 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
+            }
             throw e;
         }
     }
