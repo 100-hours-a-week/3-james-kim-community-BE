@@ -2,10 +2,7 @@ package ktb.cloud_james.community.controller;
 
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.common.ApiResponse;
-import ktb.cloud_james.community.dto.post.PostCreateRequestDto;
-import ktb.cloud_james.community.dto.post.PostCreateResponseDto;
-import ktb.cloud_james.community.dto.post.PostDetailResponseDto;
-import ktb.cloud_james.community.dto.post.PostListResponseDto;
+import ktb.cloud_james.community.dto.post.*;
 import ktb.cloud_james.community.service.PostService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +58,7 @@ public class PostController {
             @RequestParam(required = false) Integer limit,
             @AuthenticationPrincipal Long userId
     ) {
+
         PostListResponseDto response = postService.getPostList(lastSeenId, limit, userId);
 
         return ResponseEntity
@@ -75,9 +73,26 @@ public class PostController {
             @PathVariable Long postId,
             @AuthenticationPrincipal Long userId
     ) {
+
         PostDetailResponseDto response = postService.getPostDetail(postId, userId);
 
         return ResponseEntity
                 .ok(ApiResponse.success("post_retrieved", response));
+    }
+
+    /**
+     * 게시글 수정 API
+     */
+    @PatchMapping("/{postId}")
+    public ResponseEntity<ApiResponse<PostUpdateResponseDto>> updatePost(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody PostUpdateRequestDto request
+    ) {
+
+        PostUpdateResponseDto response = postService.updatePost(userId, postId, request);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("post_updated", response));
     }
 }

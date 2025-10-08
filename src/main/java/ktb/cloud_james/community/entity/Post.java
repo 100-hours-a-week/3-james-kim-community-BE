@@ -61,4 +61,14 @@ public class Post {
         this.title = title;
         this.content = content;
     }
+
+    // ========== 비즈니스 로직 ==========
+
+    public void updateTitle(String title) {
+        this.title = title;
+    }
+
+    public void updateContent(String content) {
+        this.content = content;
+    }
 }

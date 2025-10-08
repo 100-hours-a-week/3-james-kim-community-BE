@@ -1,10 +1,7 @@
 package ktb.cloud_james.community.service;
 
 
-import ktb.cloud_james.community.dto.post.PostCreateRequestDto;
-import ktb.cloud_james.community.dto.post.PostCreateResponseDto;
-import ktb.cloud_james.community.dto.post.PostDetailResponseDto;
-import ktb.cloud_james.community.dto.post.PostListResponseDto;
+import ktb.cloud_james.community.dto.post.*;
 import ktb.cloud_james.community.entity.Post;
 import ktb.cloud_james.community.entity.PostImage;
 import ktb.cloud_james.community.entity.PostStats;
@@ -20,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -40,6 +38,7 @@ public class PostService {
     private final ViewCountCacheService viewCountCacheService;
 
     private static final int DEFAULT_PAGE_SIZE = 20; // 최초 기본 페이지 크기
+    private static final int MAX_PAGE_SIZE = 50;     // 잘못된 페이지 크게 들어올 것 방지
 
     /**
      * 게시글 작성 처리 흐름:
@@ -122,8 +121,11 @@ public class PostService {
         log.info("게시글 목록 조회 - lastSeenId: {}, limit: {}, userId: {}",
                 lastSeenId, limit, currentUserId);
 
-        // 페이지 크기 설정 (null이면 기본값)
-        int pageSize = (limit != null && limit > 0) ? limit : DEFAULT_PAGE_SIZE;
+        int pageSize = DEFAULT_PAGE_SIZE;
+        if (limit != null) {
+            if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
+            pageSize = limit;
+        }
 
         // 게시글 조회 (limit + 1개 조회하여 hasNext 판별)
         List<PostListResponseDto.PostSummaryDto> posts =
@@ -198,5 +200,137 @@ public class PostService {
                 .isLiked(post.getIsLiked())
                 .isAuthor(post.getIsAuthor())
                 .build();
+    }
+
+    /**
+     * 게시글 수정 처리 흐름:
+     * 1. 게시글 조회 및 권한 확인
+     * 2. 수정 요청 검증 (최소 1개 필드는 수정되어야 함)
+     * 3. 이미지 처리 (교체/삭제/유지)
+     * 4. 게시글 업데이트
+     * 5. 실패 시 롤백
+     */
+    @Transactional
+    public PostUpdateResponseDto updatePost(Long userId, Long postId, PostUpdateRequestDto request) {
+        log.info("게시글 수정 시도 - userId: {}, postId: {}", userId, postId);
+
+        // 1. 게시글 조회
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> {
+                    log.warn("게시글 수정 실패 - 존재하지 않는 게시글: postId={}", postId);
+                    return new CustomException(ErrorCode.POST_NOT_FOUND);
+                });
+
+        // 1-2. 작성자 권한 확인
+        if (!post.getUser().getId().equals(userId)) {
+            log.warn("게시글 수정 실패 - 권한 없음: userId={}, postId={}", userId, postId);
+            throw new CustomException(ErrorCode.NOT_POST_AUTHOR);
+        }
+
+        // 2. 수정 요청 검증
+        if (!request.hasAnyUpdate()) {
+            log.warn("게시글 수정 실패 - 수정할 내용 없음: postId={}", postId);
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        // 3. 이미지 처리
+        String finalImageUrl = handleImageUpdate(post, request.getImageUrl());
+
+        try {
+
+            // 4. 게시글 업데이트 시도
+            updatePostFields(post, request, finalImageUrl);
+
+            log.info("게시글 수정 완료 - postId: {}", postId);
+
+            return new PostUpdateResponseDto(postId);
+        } catch (Exception e) {
+            // 실패 시 새로 이동한 이미지 삭제
+            if (finalImageUrl != null && finalImageUrl.startsWith("/images/")) {
+                imageService.deleteFile(finalImageUrl);
+                log.error("게시글 수정 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
+            }
+            throw e;
+        }
+    }
+
+    private String handleImageUpdate(Post post, String requestImageUrl) {
+        // null: 이미지 수정 안 함
+        if (requestImageUrl == null) {
+            log.debug("이미지 수정 없음 - postId: {}", post.getId());
+            return null;
+        }
+
+        // 빈 문자열: 이미지 삭제
+        if (requestImageUrl.isEmpty()) {
+            log.info("이미지 삭제 요청 - postId: {}", post.getId());
+            softDeletePostImage(post.getId());
+            return ""; // 빈 문자열을 반환하여 삭제 표시
+        }
+
+        // 임시 이미지: 새 이미지로 교체
+        if (requestImageUrl.startsWith("/temp/")) {
+            log.info("이미지 교체 요청 - postId: {}, tempUrl: {}", post.getId(), requestImageUrl);
+
+            // 기존 이미지 Soft Delete
+            softDeletePostImage(post.getId());
+
+            // 새 이미지를 정식 디렉토리로 이동
+            try {
+                String newImageUrl = imageService.moveToPermanent(requestImageUrl);
+                log.info("이미지 이동 완료 - {} → {}", requestImageUrl, newImageUrl);
+                return newImageUrl;
+            } catch (Exception e) {
+                log.error("이미지 이동 실패 - tempUrl: {}", requestImageUrl, e);
+                throw new CustomException(ErrorCode.IMAGE_UPLOAD_FAILED);
+            }
+        }
+
+        // 그 외의 경우: 무시
+        log.warn("잘못된 이미지 URL - postId: {}, imageUrl: {}", post.getId(), requestImageUrl);
+        throw new CustomException(ErrorCode.INVALID_REQUEST);
+    }
+
+    /**
+     * 게시글 필드 업데이트
+     * - JPA Dirty Checking 활용 (별도 save() 불필요)
+     */
+    private void updatePostFields(Post post, PostUpdateRequestDto request, String finalImageUrl) {
+        // 제목 수정
+        if (request.getTitle() != null) {
+            post.updateTitle(request.getTitle());
+            log.debug("제목 수정 - postId: {}, title: {}", post.getId(), request.getTitle());
+        }
+
+        // 내용 수정
+        if (request.getContent() != null) {
+            post.updateContent(request.getContent());
+            log.debug("내용 수정 - postId: {}", post.getId());
+        }
+
+        // 이미지 처리
+        if (finalImageUrl != null) {
+            if (finalImageUrl.isEmpty()) {
+                // 이미지 삭제됨 (이미 Soft Delete 완료)
+                log.debug("이미지 삭제 완료 - postId: {}", post.getId());
+            } else {
+                // 새 이미지 저장
+                PostImage newImage = PostImage.builder()
+                        .post(post)
+                        .imageUrl(finalImageUrl)
+                        .imageOrder(0)
+                        .isMain(true)
+                        .build();
+                postImageRepository.save(newImage);
+                log.debug("새 이미지 저장 완료 - postId: {}, imageUrl: {}", post.getId(), finalImageUrl);
+            }
+        }
+    }
+
+    private void softDeletePostImage(Long postId) {
+        int deleted = postImageRepository.softDeleteMainImage(postId, LocalDateTime.now());
+        if (deleted > 0) {
+            log.info("이미지 Soft Delete 완료 - postId: {}", postId);
+        }
     }
 }
