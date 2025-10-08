@@ -8,10 +8,7 @@ import ktb.cloud_james.community.entity.PostStats;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
-import ktb.cloud_james.community.repository.PostImageRepository;
-import ktb.cloud_james.community.repository.PostRepository;
-import ktb.cloud_james.community.repository.PostStatsRepository;
-import ktb.cloud_james.community.repository.UserRepository;
+import ktb.cloud_james.community.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +30,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final PostStatsRepository postStatsRepository;
     private final PostImageRepository postImageRepository;
+    private final CommentRepository commentRepository;
     private final UserRepository userRepository;
     private final ImageService imageService;
     private final ViewCountCacheService viewCountCacheService;
@@ -258,7 +256,8 @@ public class PostService {
      * 게시글 삭제 (Soft Delete) 처리 흐름:
      * 1. 게시글 조회 및 권한 확인
      * 2. Post Soft Delete (deleted_at 기록)
-     * 3. PostImage Soft Delete (Cascade)
+     * 3. PostImage Soft Delete
+     * 4. Comments Soft Delete
      * 4. PostStats는 유지 (FK 공유로 삭제 불가, 통계 보존)
      * 5. PostLike는 유지 (통계용 데이터 보존)
      */
@@ -298,10 +297,17 @@ public class PostService {
                     postId, deletedImages);
         }
 
-        // 4. PostStats는 유지
+        // 4. 댓글 삭제 (있는 경우에만)
+        int deletedComments = commentRepository.softDeleteByPostId(postId, LocalDateTime.now());
+        if (deletedComments > 0) {
+            log.info("게시글 댓글 Soft Delete 완료 - postId: {}, 삭제된 댓글 수: {}",
+                    postId, deletedComments);
+        }
+
+        // 5. PostStats는 유지
         // - FK 공유 (post_id가 PK)로 인해 삭제 불가
 
-        // 5. PostLike는 유지 (구현전)
+        // 6. PostLike는 유지 (구현전)
 
         log.info("게시글 삭제 완료 - postId: {}", postId);
     }
