@@ -82,6 +82,10 @@ public class PostController {
 
     /**
      * 게시글 수정 API
+     * 이미지 처리:
+     * - null: 변경 없음 (기존 이미지 유지)
+     * - "": 기존 이미지 삭제
+     * - "/temp/...": 새 이미지로 교체
      */
     @PatchMapping("/{postId}")
     public ResponseEntity<ApiResponse<PostUpdateResponseDto>> updatePost(
@@ -94,5 +98,22 @@ public class PostController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("post_updated", response));
+    }
+
+    /**
+     * 게시글 삭제 API
+     * - Soft Delete 방식 (deleted_at에 시간 기록) + 게시글 이미지도 같이
+     * - 작성자만 삭제 가능
+     */
+    @DeleteMapping("/{postId}")
+    public ResponseEntity<ApiResponse<Void>> deletePost(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal Long userId
+    ) {
+
+        postService.deletePost(userId, postId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("post_deleted"));
     }
 }

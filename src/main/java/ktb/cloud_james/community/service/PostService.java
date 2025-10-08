@@ -254,6 +254,58 @@ public class PostService {
         }
     }
 
+    /**
+     * 게시글 삭제 (Soft Delete) 처리 흐름:
+     * 1. 게시글 조회 및 권한 확인
+     * 2. Post Soft Delete (deleted_at 기록)
+     * 3. PostImage Soft Delete (Cascade)
+     * 4. PostStats는 유지 (FK 공유로 삭제 불가, 통계 보존)
+     * 5. PostLike는 유지 (통계용 데이터 보존)
+     */
+
+    @Transactional
+    public void deletePost(Long userId, Long postId) {
+        log.info("게시글 삭제 시도 - userId: {}, postId: {}", userId, postId);
+
+        // 1. 게시글 조회
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> {
+                    log.warn("게시글 삭제 실패 - 존재하지 않는 게시글: postId={}", postId);
+                    return new CustomException(ErrorCode.POST_NOT_FOUND);
+                });
+
+
+        // 1-2. 이미 삭제된 게시글인지 확인
+        if (post.getDeletedAt() != null) {
+            log.warn("게시글 삭제 실패 - 이미 삭제된 게시글: postId={}", postId);
+            throw new CustomException(ErrorCode.POST_NOT_FOUND);
+        }
+
+        // 1-3. 작성자 권한 확인
+        if (!post.getUser().getId().equals(userId)) {
+            log.warn("게시글 삭제 실패 - 권한 없음: userId={}, postId={}", userId, postId);
+            throw new CustomException(ErrorCode.NOT_POST_AUTHOR);
+        }
+
+        // 2. 게시글 삭제
+        post.softDelete();
+        log.info("게시글 Soft Delete 완료 - postId: {}", postId);
+
+        // 3. 게시글 이미지 삭제 (있는 경우에만)
+        int deletedImages = postImageRepository.softDeleteByPostId(postId, LocalDateTime.now());
+        if (deletedImages > 0) {
+            log.info("게시글 이미지 Soft Delete 완료 - postId: {}, 삭제된 이미지 수: {}",
+                    postId, deletedImages);
+        }
+
+        // 4. PostStats는 유지
+        // - FK 공유 (post_id가 PK)로 인해 삭제 불가
+
+        // 5. PostLike는 유지 (구현전)
+
+        log.info("게시글 삭제 완료 - postId: {}", postId);
+    }
+
     private String handleImageUpdate(Post post, String requestImageUrl) {
         // null: 이미지 수정 안 함
         if (requestImageUrl == null) {
@@ -328,7 +380,7 @@ public class PostService {
     }
 
     private void softDeletePostImage(Long postId) {
-        int deleted = postImageRepository.softDeleteMainImage(postId, LocalDateTime.now());
+        int deleted = postImageRepository.softDeleteByPostId(postId, LocalDateTime.now());
         if (deleted > 0) {
             log.info("이미지 Soft Delete 완료 - postId: {}", postId);
         }

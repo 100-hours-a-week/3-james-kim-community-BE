@@ -23,9 +23,11 @@ public interface PostImageRepository extends JpaRepository<PostImage, Long> {
     /**
      * 게시글의 이미지 Soft Delete
      * - deleted_at에 현재 시간 기록
+     * - 게시글 수정 시 이미지 삭제/교체
+     * - 게시글 삭제 시 이미지 같이 삭제
      */
     @Modifying
     @Query("UPDATE PostImage pi SET pi.deletedAt = :deletedAt " +
-            "WHERE pi.post.id = :postId AND pi.isMain = true AND pi.deletedAt IS NULL")
-    int softDeleteMainImage(@Param("postId") Long postId, @Param("deletedAt") LocalDateTime deletedAt);
+            "WHERE pi.post.id = :postId AND pi.deletedAt IS NULL")
+    int softDeleteByPostId(@Param("postId") Long postId, @Param("deletedAt") LocalDateTime deletedAt);
 }
