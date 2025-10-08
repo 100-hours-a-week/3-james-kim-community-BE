@@ -20,4 +20,10 @@ public interface PostStatsRepository extends JpaRepository<PostStats, Long> {
     @Modifying
     @Query("UPDATE PostStats ps SET ps.commentCount = ps.commentCount + 1 WHERE ps.postId = :postId")
     int incrementCommentCount(@Param("postId") Long postId);
+
+    // 댓글 수 감소 (원자적 연산)
+    @Modifying
+    @Query("UPDATE PostStats ps SET ps.commentCount = ps.commentCount - 1 " +
+            "WHERE ps.postId = :postId AND ps.commentCount > 0")
+    int decrementCommentCount(@Param("postId") Long postId);
 }

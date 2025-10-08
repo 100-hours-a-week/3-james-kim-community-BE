@@ -220,4 +220,72 @@ public class CommentService {
 
         return new CommentUpdateResponseDto(commentId);
     }
+
+    /**
+     * 댓글 삭제 처리 흐름 (Soft Delete):
+     * 1. 댓글 조회
+     * 2. 이미 삭제된 댓글 체크
+     * 3. 게시글/작성자 권한 확인
+     * 4. 댓글 Soft Delete (deleted_at 기록)
+     * 5. PostStats의 댓글 수 감소 (원자적 연산)
+     * 6. 응답 DTO 생성
+     */
+    @Transactional
+    public CommentDeleteResponseDto deleteComment(
+            Long userId,
+            Long postId,
+            Long commentId
+    ) {
+        log.info("댓글 삭제 시도 - userId: {}, postId: {}, commentId: {}",
+                userId, postId, commentId);
+
+        // 1. 댓글 조회
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> {
+                    log.warn("댓글 삭제 실패 - 존재하지 않는 댓글: commentId={}", commentId);
+                    return new CustomException(ErrorCode.COMMENT_NOT_FOUND);
+                });
+
+        // 2. 이미 삭제된 댓글 체크
+        if (comment.getDeletedAt() != null) {
+            log.warn("댓글 삭제 실패 - 이미 삭제된 댓글: commentId={}", commentId);
+            throw new CustomException(ErrorCode.COMMENT_NOT_FOUND);
+        }
+
+        // 3. 게시글 ID 일치 확인 (URL의 postId와 댓글의 postId 비교)
+        if (!comment.getPost().getId().equals(postId)) {
+            log.warn("댓글 삭제 실패 - 게시글 불일치: commentId={}, urlPostId={}, actualPostId={}",
+                    commentId, postId, comment.getPost().getId());
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        // 3-2. 작성자 권한 확인
+        if (!comment.getUser().getId().equals(userId)) {
+            log.warn("댓글 삭제 실패 - 권한 없음: userId={}, commentId={}, authorId={}",
+                    userId, commentId, comment.getUser().getId());
+            throw new CustomException(ErrorCode.NOT_COMMENT_AUTHOR);
+        }
+
+        // 4. 댓글 Soft Delete
+        comment.softDelete();
+        log.info("댓글 Soft Delete 완료 - commentId: {}", commentId);
+
+        // 5. PostStats의 댓글 수 감소 (원자적 연산)
+        int updated = postStatsRepository.decrementCommentCount(postId);
+        if (updated == 0) {
+            log.error("댓글 수 감소 실패 - PostStats 없거나 이미 0: postId={}", postId);
+            // 댓글 수가 0이면 감소 안 함 (음수 방지)
+            // 에러는 던지지 않고 경고만 로그
+        }
+
+        // 6. 응답 DTO 생성 (최신 댓글 수 조회)
+        Long currentCommentCount = postStatsRepository.findById(postId)
+                .map(PostStats::getCommentCount)
+                .orElse(0L);
+
+        log.info("댓글 삭제 완료 - commentId: {}, postId: {}, 댓글 수: {}",
+                commentId, postId, currentCommentCount);
+
+        return new CommentDeleteResponseDto(currentCommentCount);
+    }
 }

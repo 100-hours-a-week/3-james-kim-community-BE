@@ -77,4 +77,19 @@ public class CommentController {
                 .ok(ApiResponse.success("comment_updated", response));
     }
 
+    /**
+     * 댓글 삭제 API
+     */
+    @DeleteMapping("/{commentId}")
+    public ResponseEntity<ApiResponse<CommentDeleteResponseDto>> deleteComment(
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal Long userId
+    ) {
+
+        CommentDeleteResponseDto response = commentService.deleteComment(userId, postId, commentId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("comment_deleted", response));
+    }
 }
