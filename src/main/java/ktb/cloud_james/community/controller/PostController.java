@@ -48,7 +48,7 @@ public class PostController {
     /**
      * 게시글 목록 조회 API (인피니티 스크롤) 사용법:
      * - 첫 페이지: GET /api/posts?limit=20
-     * - 다음 페이지: GET /api/posts?lastSeenId=15&limit=2
+     * - 다음 페이지: GET /api/posts?lastSeenId=21&limit=10
      * Headers: (일반적인 SNS는 비로그인도 볼 수 있지만, 이 커뮤니티는 기획상 로그인해야만 확인이 가능하다. -> 확장은 쉽게 가능)
      * - Authorization: Bearer {access_token} (필수)
      */

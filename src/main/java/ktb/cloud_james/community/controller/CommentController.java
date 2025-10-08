@@ -3,6 +3,7 @@ package ktb.cloud_james.community.controller;
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.comment.CommentCreateRequestDto;
 import ktb.cloud_james.community.dto.comment.CommentCreateResponseDto;
+import ktb.cloud_james.community.dto.comment.CommentListResponseDto;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.service.CommentService;
 import lombok.RequiredArgsConstructor;
@@ -36,5 +37,25 @@ public class CommentController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success("comment_created", response));
+    }
+
+    /**
+     * 댓글 목록 조회 API (인피니티 스크롤)
+     * - 첫 페이지: GET /api/posts/1/comments?limit=10
+     * - 다음 페이지: GET /api/posts/1/comments?lastSeenId=11&limit=10
+     * Headers: Authorization: Bearer {access_token}
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<CommentListResponseDto>> getCommentList(
+            @PathVariable Long postId,
+            @RequestParam(required = false) Long lastSeenId,
+            @RequestParam(required = false) Integer limit,
+            @AuthenticationPrincipal Long userId
+    ) {
+
+        CommentListResponseDto response = commentService.getCommentList(postId, lastSeenId, limit, userId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("comments_retrieved", response));
     }
 }

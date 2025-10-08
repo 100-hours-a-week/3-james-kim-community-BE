@@ -2,6 +2,7 @@ package ktb.cloud_james.community.service;
 
 import ktb.cloud_james.community.dto.comment.CommentCreateRequestDto;
 import ktb.cloud_james.community.dto.comment.CommentCreateResponseDto;
+import ktb.cloud_james.community.dto.comment.CommentListResponseDto;
 import ktb.cloud_james.community.entity.Comment;
 import ktb.cloud_james.community.entity.Post;
 import ktb.cloud_james.community.entity.PostStats;
@@ -17,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * 댓글 관련 비즈니스 로직
  * - 댓글 작성, 수정, 삭제, 조회 등
@@ -31,6 +34,9 @@ public class CommentService {
     private final PostRepository postRepository;
     private final PostStatsRepository postStatsRepository;
     private final UserRepository userRepository;
+
+    private static final int DEFAULT_COMMENT_PAGE_SIZE = 10;
+    private static final int MAX_COMMENT_PAGE_SIZE = 30;
 
     /**
      * 댓글 작성 처리 흐름:
@@ -103,6 +109,65 @@ public class CommentService {
                         .createdAt(savedComment.getCreatedAt())
                         .build())
                 .commentsCount(currentCommentCount)
+                .build();
+    }
+
+    /**
+     * 댓글 목록 조회 (인피니티 스크롤)
+     */
+    public CommentListResponseDto getCommentList(
+            Long postId,
+            Long lastSeenId,
+            Integer limit,
+            Long currentUserId
+    ) {
+        log.info("댓글 목록 조회 - postId: {}, lastSeenId: {}, limit: {}, userId: {}",
+                postId, lastSeenId, limit, currentUserId);
+
+        // 게시글 존재 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> {
+                    log.warn("댓글 조회 실패 - 존재하지 않는 게시글: postId={}", postId);
+                    return new CustomException(ErrorCode.POST_NOT_FOUND);
+                });
+
+        if (post.getDeletedAt() != null) {
+            log.warn("댓글 조회 실패 - 삭제된 게시글: postId={}", postId);
+            throw new CustomException(ErrorCode.POST_NOT_FOUND);
+        }
+
+        // 페이지 크기 설정
+        int pageSize = DEFAULT_COMMENT_PAGE_SIZE;
+        if (limit != null) {
+            if (limit > MAX_COMMENT_PAGE_SIZE) limit = MAX_COMMENT_PAGE_SIZE;
+            if (limit > 0) pageSize = limit;
+        }
+
+        // 댓글 조회 (limit + 1개 조회하여 hasNext 판별)
+        List<CommentListResponseDto.CommentSummaryDto> comments =
+                commentRepository.findCommentsWithCursor(postId, lastSeenId, pageSize, currentUserId);
+
+        // hasNext 판별
+        boolean hasNext = comments.size() > pageSize;
+        if (hasNext) {
+            comments = comments.subList(0, pageSize);
+        }
+
+        // 5. 다음 커서 값 (마지막 댓글 ID)
+        Long nextCursor = comments.isEmpty() ? null : comments.get(comments.size() - 1).getCommentId();
+
+        // 6. 페이징 정보 생성
+        CommentListResponseDto.PaginationInfo pagination = CommentListResponseDto.PaginationInfo.builder()
+                .lastSeenId(nextCursor)
+                .hasNext(hasNext)
+                .limit(pageSize)
+                .build();
+
+        log.info("댓글 목록 조회 완료 - postId: {}, 조회된 댓글: {}개, hasNext: {}", postId, comments.size(), hasNext);
+
+        return CommentListResponseDto.builder()
+                .comments(comments)
+                .pagination(pagination)
                 .build();
     }
 }

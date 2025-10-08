@@ -124,7 +124,7 @@ public class PostService {
         int pageSize = DEFAULT_PAGE_SIZE;
         if (limit != null) {
             if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
-            pageSize = limit;
+            if (limit > 0) pageSize = limit;
         }
 
         // 게시글 조회 (limit + 1개 조회하여 hasNext 판별)
