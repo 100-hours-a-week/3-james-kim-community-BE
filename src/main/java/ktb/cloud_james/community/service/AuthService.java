@@ -40,8 +40,9 @@ public class AuthService {
     /**
      * 로그인
      * 1. 이메일로 사용자 조회
-     * 2. 비밀번호 검증
-     * 3. 토큰 발급
+     * 2. 탈퇴/비활성 회원 차단 (회원탈퇴 후 추가된 로직)
+     * 3. 비밀번호 검증
+     * 4. 토큰 발급
      */
     @Transactional
     public LoginResponseDto login(LoginRequestDto request) {
@@ -54,17 +55,24 @@ public class AuthService {
                     return new CustomException(ErrorCode.INVALID_CREDENTIALS);
                 });
 
-        // 2. 비밀번호 검증
+        // 2. 탈퇴/비활성 회원 차단 (회원탈퇴 후 추가된 로직)
+        if (user.isDeleted() || !user.getIsActive()) {
+            log.warn("로그인 실패 - 탈퇴 또는 비활성 회원: email={}, isDeleted={}, isActive={}",
+                    request.getEmail(), user.isDeleted(), user.getIsActive());
+            throw new CustomException(ErrorCode.ACCOUNT_INACTIVE);
+        }
+
+        // 3. 비밀번호 검증
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             log.warn("로그인 실패 - 비밀번호 불일치: email={}", request.getEmail());
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        // 3. 토큰 발급
+        // 4. 토큰 발급
         String accessToken = jwtTokenProvider.createAccessToken(user.getId());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
 
-        // 4. Refresh Token DB 저장 (기존 토큰 있으면 갱신)
+        // 5. Refresh Token DB 저장 (기존 토큰 있으면 갱신)
         saveRefreshToken(user, refreshToken);
 
         log.info("로그인 성공 - userId: {}", user.getId());
@@ -137,21 +145,32 @@ public class AuthService {
                     return new CustomException(ErrorCode.INVALID_TOKEN);
                 });
 
-        // 4. DB에서 해당 User의 Refresh Token 조회
+        // 4. 탈퇴/비활성 회원 차단
+        if (user.isDeleted() || !user.getIsActive()) {
+            log.warn("토큰 갱신 실패 - 탈퇴 또는 비활성 회원: userId={}, isDeleted={}, isActive={}",
+                    userId, user.isDeleted(), user.getIsActive());
+
+            // 탈퇴 회원의 토큰은 즉시 삭제
+            userTokenRepository.findByUser(user).ifPresent(userTokenRepository::delete);
+
+            throw new CustomException(ErrorCode.ACCOUNT_INACTIVE);
+        }
+
+        // 5. DB에서 해당 User의 Refresh Token 조회
         UserToken userToken = userTokenRepository.findByUser(user)
                 .orElseThrow(() -> {
                     log.warn("토큰 갱신 실패 - DB에 토큰 없음: userId={}", userId);
                     return new CustomException(ErrorCode.INVALID_TOKEN);
                 });
 
-        // 5. 클라이언트가 보낸 Refresh Token과 DB의 암호화된 토큰 비교
+        // 6. 클라이언트가 보낸 Refresh Token과 DB의 암호화된 토큰 비교
         String hashedRefreshToken = hashRefreshToken(refreshToken);
         if (!hashedRefreshToken.equals(userToken.getRefreshToken())) {
             log.warn("토큰 갱신 실패 - 토큰 불일치: userId={}", userId);
             throw new CustomException(ErrorCode.INVALID_TOKEN);
         }
 
-        // 6. 만료 시간 확인
+        // 7. 만료 시간 확인
         if (userToken.getExpiresAt().isBefore(LocalDateTime.now())) {
             log.warn("토큰 갱신 실패 - 만료된 토큰: userId={}", userId);
             // 만료된 토큰 삭제
@@ -159,7 +178,7 @@ public class AuthService {
             throw new CustomException(ErrorCode.TOKEN_EXPIRED);
         }
 
-        // 7. 새로운 Access Token 발급
+        // 8. 새로운 Access Token 발급
         String newAccessToken = jwtTokenProvider.createAccessToken(userId);
 
         log.info("토큰 갱신 성공 - userId: {}", userId);

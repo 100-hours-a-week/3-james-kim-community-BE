@@ -46,6 +46,7 @@ public class CommentRepositoryImpl implements CommentRepositoryCustom{
                         comment.content,
                         user.nickname,
                         user.imageUrl,
+                        user.deletedAt.isNotNull(), // 탈퇴 여부 추가
                         comment.createdAt,
                         comment.user.id.eq(currentUserId)
                 ))

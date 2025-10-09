@@ -29,6 +29,10 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
 
     private final JPAQueryFactory queryFactory;
 
+    /**
+     * 게시글 목록 조회 (인피니티 스크롤)
+     * - 탈퇴 여부 포함하여 조회 (회원탈퇴까지 구현 후 수정)
+     */
     @Override
     public List<PostListResponseDto.PostSummaryDto> findPostsWithCursor(
             Long lastSeenId,
@@ -42,6 +46,7 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                         post.title,
                         user.nickname,
                         user.imageUrl,
+                        user.deletedAt.isNotNull(), // 탈퇴 여부 추가
                         post.createdAt,
                         postStats.likeCount,
                         postStats.commentCount,
@@ -80,7 +85,8 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                         Projections.constructor( // 작성자 정보
                                 PostDetailResponseDto.AuthorInfo.class,
                                 user.nickname,
-                                user.imageUrl
+                                user.imageUrl,
+                                user.deletedAt.isNotNull() // 탈퇴 여부 추가
                         ),
                         Projections.constructor( // 통계 정보
                                 PostDetailResponseDto.StatsInfo.class,

@@ -32,6 +32,7 @@ public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "unauthorized"),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "invalid_token"),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "token_expired"),
+    ACCOUNT_INACTIVE(HttpStatus.FORBIDDEN, "account_inactive"),
 
     // ========== 게시글 관련 ==========
     POST_NOT_FOUND(HttpStatus.NOT_FOUND, "post_not_found"),

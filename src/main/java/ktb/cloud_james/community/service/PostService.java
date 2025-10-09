@@ -115,6 +115,7 @@ public class PostService {
 
     /**
      * 게시글 목록 조회 (인피니티 스크롤)
+     * - 탈퇴한 회원 후처리 로직 추가
      */
     public PostListResponseDto getPostList(Long lastSeenId, Integer limit, Long currentUserId) {
         log.info("게시글 목록 조회 - lastSeenId: {}, limit: {}, userId: {}",
@@ -129,6 +130,9 @@ public class PostService {
         // 게시글 조회 (limit + 1개 조회하여 hasNext 판별)
         List<PostListResponseDto.PostSummaryDto> posts =
                 postRepository.findPostsWithCursor(lastSeenId, pageSize, currentUserId);
+
+        // 탈퇴한 회원 마스킹 처리
+        posts.forEach(PostListResponseDto.PostSummaryDto::maskDeletedUser);
 
         // hasNext 판별
         boolean hasNext = posts.size() > pageSize;
@@ -160,6 +164,8 @@ public class PostService {
      * 1. 게시글 조회
      * 2. 조회수 증가 (캐시만 업데이트)
      * 3. 캐시된 조회수를 응답에 반영
+     *
+     * - 탈퇴한 회원 후처리 로직 추가
      */
     public PostDetailResponseDto getPostDetail(Long postId, Long currentUserId) {
         log.info("게시글 상세 조회 - postId: {}, userId: {}", postId, currentUserId);
@@ -170,6 +176,9 @@ public class PostService {
                     log.warn("게시글 조회 실패 - postId: {} (존재하지 않거나 삭제됨)", postId);
                     return new CustomException(ErrorCode.POST_NOT_FOUND);
                 });
+
+        // 탈퇴한 회원 마스킹 처리
+        post.getAuthor().maskDeletedUser();
 
         // 2. 조회수 증가 (인메모리 캐시만 업데이트, DB는 스케줄러가 동기화)
         Long cachedViewCount = viewCountCacheService.incrementViewCount(postId);
@@ -358,7 +367,6 @@ public class PostService {
 
     /**
      * 게시글 필드 업데이트
-     * - JPA Dirty Checking 활용 (별도 save() 불필요)
      */
     private void updatePostFields(Post post, PostUpdateRequestDto request, String finalImageUrl) {
         // 제목 수정

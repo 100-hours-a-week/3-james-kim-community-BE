@@ -112,6 +112,7 @@ public class CommentService {
 
     /**
      * 댓글 목록 조회 (인피니티 스크롤)
+     * - 탈퇴한 회원 후처리 로직 추가
      */
     public CommentListResponseDto getCommentList(
             Long postId,
@@ -144,6 +145,9 @@ public class CommentService {
         // 댓글 조회 (limit + 1개 조회하여 hasNext 판별)
         List<CommentListResponseDto.CommentSummaryDto> comments =
                 commentRepository.findCommentsWithCursor(postId, lastSeenId, pageSize, currentUserId);
+
+        // 탈퇴한 회원 마스킹 처리
+        comments.forEach(CommentListResponseDto.CommentSummaryDto::maskDeletedUser);
 
         // hasNext 판별
         boolean hasNext = comments.size() > pageSize;

@@ -1,6 +1,7 @@
 package ktb.cloud_james.community.dto.post;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -44,6 +45,17 @@ public class PostDetailResponseDto {
     public static class AuthorInfo {
         private String nickname;
         private String profileImage;
+
+        @JsonIgnore
+        private Boolean isAuthorDeleted;      // 탈퇴 여부 (내부 처리용)
+
+        // 탈퇴한 회원이면 닉네임/이미지 변경
+        public void maskDeletedUser() {
+            if (isAuthorDeleted != null && isAuthorDeleted) {
+                this.nickname = "탈퇴한 회원";
+                this.profileImage = null;
+            }
+        }
     }
 
     /**

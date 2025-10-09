@@ -1,6 +1,7 @@
 package ktb.cloud_james.community.dto.post;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,6 +34,9 @@ public class PostListResponseDto {
         private String authorNickname;       // 작성자
         private String authorProfileImage;   // 작성자 프로필 이미지
 
+        @JsonIgnore
+        private Boolean isAuthorDeleted;     // 탈퇴 여부 (내부 처리용)
+
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createdAt;      // 게시글 작성일시
 
@@ -41,6 +45,14 @@ public class PostListResponseDto {
         private Long viewCount;
 
         private Boolean isLiked;
+
+        // 탈퇴한 회원이면 닉네임/이미지 변경
+        public void maskDeletedUser() {
+            if (isAuthorDeleted != null && isAuthorDeleted) {
+                this.authorNickname = "탈퇴한 회원";
+                this.authorProfileImage = null;
+            }
+        }
     }
 
     @Getter
