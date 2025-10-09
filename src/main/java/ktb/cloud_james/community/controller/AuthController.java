@@ -8,11 +8,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * 인증(Authentication) 관련 API 컨트롤러
- * - 중복 체크, 토큰 갱신, 로그인 등
+ * - 중복 체크, 토큰 갱신, 로그인, 로그아웃 등
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -33,6 +34,19 @@ public class AuthController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("login_success", response));
+    }
+
+    /**
+     * 로그아웃 API
+     */
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @AuthenticationPrincipal Long userId) {
+
+        authService.logout(userId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("logout_success", null));
     }
 
     /**

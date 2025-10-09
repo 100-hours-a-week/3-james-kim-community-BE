@@ -24,6 +24,7 @@ import java.util.HexFormat;
  * 인증(Authentication) 관련 비즈니스 로직
  * - 이메일/닉네임 중복 체크 (회원가입 전 검증)
  * - 토큰 갱신
+ * - 로그인/로그아웃
  */
 @Service
 @Slf4j
@@ -70,6 +71,33 @@ public class AuthService {
 
         return new LoginResponseDto(user.getId(), accessToken, refreshToken);
     }
+
+    /**
+     * 로그아웃
+     * 1. 현재 로그인한 사용자 조회
+     * 2. DB에서 해당 사용자의 Refresh Token 삭제
+     */
+    @Transactional
+    public void logout(Long userId) {
+        log.info("로그아웃 시도 - userId: {}", userId);
+
+        // 1. 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.warn("로그아웃 실패 - 존재하지 않는 사용자: {}", userId);
+                    return new CustomException(ErrorCode.UNAUTHORIZED);
+                });
+
+        // 2. DB에서 Refresh Token 삭제
+        userTokenRepository.findByUser(user)
+                .ifPresent(userToken -> {
+                    userTokenRepository.delete(userToken);
+                    log.info("Refresh Token 삭제 완료 - userId: {}", userId);
+                });
+
+        log.info("로그아웃 성공 - userId: {}", userId);
+    }
+
 
     /**
      * - 회원가입 전 검증이므로 AuthService에 위치
