@@ -30,6 +30,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final PostStatsRepository postStatsRepository;
     private final PostImageRepository postImageRepository;
+    private final PostLikeRepository postLikeRepository;
     private final CommentRepository commentRepository;
     private final UserRepository userRepository;
     private final ImageService imageService;
@@ -258,8 +259,8 @@ public class PostService {
      * 2. Post Soft Delete (deleted_at 기록)
      * 3. PostImage Soft Delete
      * 4. Comments Soft Delete
-     * 4. PostStats는 유지 (FK 공유로 삭제 불가, 통계 보존)
-     * 5. PostLike는 유지 (통계용 데이터 보존)
+     * 5. PostLike는 Hard Delete
+     * 6. PostStats는 Hard Delete
      */
 
     @Transactional
@@ -304,10 +305,16 @@ public class PostService {
                     postId, deletedComments);
         }
 
-        // 5. PostStats는 유지
-        // - FK 공유 (post_id가 PK)로 인해 삭제 불가
+        // 5. PostLike 삭제
+        int deletedLikes = postLikeRepository.deleteByPostId(postId);
+        if (deletedLikes > 0) {
+            log.info("게시글 좋아요 Hard Delete 완료 - postId: {}, 삭제된 좋아요 수: {}",
+                    postId, deletedLikes);
+        }
 
-        // 6. PostLike는 유지 (구현전)
+        // 6. PostStats 삭제
+        postStatsRepository.deleteById(postId);
+        log.info("게시글 통계 Hard Delete 완료 - postId: {}", postId);
 
         log.info("게시글 삭제 완료 - postId: {}", postId);
     }
