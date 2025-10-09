@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 사용자(User) 리소스 관련 API 컨트롤러
- * - 회원가입, 회원정보 수정, 비밀번호 수정 등
+ * - 회원가입, 회원정보 수정, 비밀번호 수정, 회원탈퇴 등
  *
  * @RestController: @Controller + @ResponseBody
  * @RequestMapping: 기본 URL 경로 /api/users
@@ -96,5 +96,18 @@ public class UserController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("password_updated", response));
+    }
+
+    /**
+     * 회원탈퇴 API
+     */
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<Void>> withdrawUser(
+            @AuthenticationPrincipal Long currentUserId) {
+
+        userService.withdrawUser(currentUserId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("account_deleted", null));
     }
 }

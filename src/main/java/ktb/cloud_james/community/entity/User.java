@@ -83,4 +83,14 @@ public class User {
         this.password = encodedPassword;
         this.passwordChangedAt = LocalDateTime.now();
     }
+
+    // 회원 탈퇴
+    public void withdraw() {
+        this.deletedAt = LocalDateTime.now();
+        this.isActive = false;
+    }
+
+    public boolean isDeleted() {
+        return this.deletedAt != null;
+    }
 }

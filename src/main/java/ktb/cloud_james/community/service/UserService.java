@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserTokenRepository userTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
@@ -248,6 +249,59 @@ public class UserService {
         log.info("비밀번호 수정 완료 - userId: {}", userId);
 
         return new PasswordUpdateResponseDto(userId);
+    }
+
+    /**
+     * 회원탈퇴 처리 흐름:
+     * 1. 사용자 조회
+     * 2. 이미 탈퇴한 회원인지 확인
+     * 3. User Soft Delete (deleted_at 기록, is_active = false)
+     * 4. Refresh Token 삭제
+     * 5. 프로필 이미지 삭제
+     *
+     * 참고:
+     * - User의 게시글/댓글은 유지 (작성자 표시: "탈퇴한 회원")
+     */
+    @Transactional
+    public void withdrawUser(Long userId) {
+        log.info("회원탈퇴 시도 - userId: {}", userId);
+
+        // 1. 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.warn("회원탈퇴 실패 - 존재하지 않는 사용자: userId={}", userId);
+                    return new CustomException(ErrorCode.USER_NOT_FOUND);
+                });
+
+        // 2. 이미 탈퇴한 회원인지 확인
+        if (user.isDeleted()) {
+            log.warn("회원탈퇴 실패 - 이미 탈퇴한 회원: userId={}", userId);
+            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        // 3. User Soft Delete
+        user.withdraw(); // deleted_at 기록, is_active = false
+        log.info("User Soft Delete 완료 - userId: {}", userId);
+
+        // 4. Refresh Token 삭제 (로그아웃 처리)
+        userTokenRepository.findByUser(user)
+                .ifPresent(userToken -> {
+                    userTokenRepository.delete(userToken);
+                    log.info("Refresh Token 삭제 완료 - userId: {}", userId);
+                });
+
+        // 5. 프로필 이미지 삭제
+        if (user.getImageUrl() != null) {
+            try {
+                imageService.deleteFile(user.getImageUrl());
+                log.info("프로필 이미지 삭제 완료 - userId: {}, imageUrl: {}", userId, user.getImageUrl());
+            } catch (Exception e) {
+                // 이미지 삭제 실패는 치명적이지 않으므로 경고만 로그
+                log.warn("프로필 이미지 삭제 실패 (고아 파일 발생) - userId: {}, imageUrl: {}", userId, user.getImageUrl(), e);
+            }
+        }
+
+        log.info("회원탈퇴 완료 - userId: {}", userId);
     }
 
 
