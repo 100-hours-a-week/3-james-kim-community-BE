@@ -29,13 +29,13 @@ public class UserUpdateRequestDto {
      * - "": 기존 이미지 삭제
      * - "/temp/...": 새 이미지로 교체
      */
-    private String profileImage;
+    private String imageUrl;
 
     /**
      * 수정할 내용이 있는지 확인
      * - 닉네임이나 이미지 중 최소 하나는 있어야 함
      */
     public boolean hasAnyUpdate() {
-        return nickname != null || profileImage != null;
+        return nickname != null || imageUrl != null;
     }
 }

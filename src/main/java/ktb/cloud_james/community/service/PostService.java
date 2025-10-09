@@ -221,7 +221,7 @@ public class PostService {
                 });
 
         // 1-2. 작성자 권한 확인
-        if (!post.getUser().getId().equals(userId)) {
+        if (!post.isAuthor(userId)) {
             log.warn("게시글 수정 실패 - 권한 없음: userId={}, postId={}", userId, postId);
             throw new CustomException(ErrorCode.NOT_POST_AUTHOR);
         }
@@ -276,13 +276,13 @@ public class PostService {
 
 
         // 1-2. 이미 삭제된 게시글인지 확인
-        if (post.getDeletedAt() != null) {
+        if (post.isDeleted()) {
             log.warn("게시글 삭제 실패 - 이미 삭제된 게시글: postId={}", postId);
             throw new CustomException(ErrorCode.POST_NOT_FOUND);
         }
 
         // 1-3. 작성자 권한 확인
-        if (!post.getUser().getId().equals(userId)) {
+        if (!post.isAuthor(userId)) {
             log.warn("게시글 삭제 실패 - 권한 없음: userId={}, postId={}", userId, postId);
             throw new CustomException(ErrorCode.NOT_POST_AUTHOR);
         }

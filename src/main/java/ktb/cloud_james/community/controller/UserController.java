@@ -6,6 +6,7 @@ import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.dto.user.PasswordUpdateRequestDto;
+import ktb.cloud_james.community.dto.user.PasswordUpdateResponseDto;
 import ktb.cloud_james.community.dto.user.UserUpdateRequestDto;
 import ktb.cloud_james.community.dto.user.UserUpdateResponseDto;
 import ktb.cloud_james.community.service.UserService;
@@ -52,11 +53,11 @@ public class UserController {
      */
     @GetMapping("/check-nickname")
     public ResponseEntity<ApiResponse<NicknameCheckResponseDto>> checkNicknameForUpdate(
-            @AuthenticationPrincipal Long currentUserId,
+            @AuthenticationPrincipal Long userId,
             @RequestParam String nickname) {
 
         NicknameCheckResponseDto response = userService.checkNicknameAvailabilityForUpdate(
-                currentUserId, nickname
+                userId, nickname
         );
 
         if (!response.getAvailable()) {
@@ -74,10 +75,10 @@ public class UserController {
      */
     @PatchMapping
     public ResponseEntity<ApiResponse<UserUpdateResponseDto>> updateUser(
-            @AuthenticationPrincipal Long currentUserId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody UserUpdateRequestDto request) {
 
-        UserUpdateResponseDto response = userService.updateUser(currentUserId, request);
+        UserUpdateResponseDto response = userService.updateUser(userId, request);
 
         return ResponseEntity
                 .ok(ApiResponse.success("user_updated", response));
@@ -86,14 +87,14 @@ public class UserController {
     /**
      * 비밀번호 수정 API
      */
-    @PatchMapping("/password")
-    public ResponseEntity<ApiResponse<Void>> updatePassword(
-            @AuthenticationPrincipal Long currentUserId,
+    @PutMapping("/password")
+    public ResponseEntity<ApiResponse<PasswordUpdateResponseDto>> updatePassword(
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody PasswordUpdateRequestDto request) {
 
-        userService.updatePassword(currentUserId, request);
+        PasswordUpdateResponseDto response = userService.updatePassword(userId, request);
 
         return ResponseEntity
-                .ok(ApiResponse.success("password_updated", null));
+                .ok(ApiResponse.success("password_updated", response));
     }
 }

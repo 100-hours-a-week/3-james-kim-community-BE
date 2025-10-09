@@ -128,16 +128,15 @@ public class UserService {
      * - 본인의 현재 닉네임은 중복으로 간주하지 않음
      */
     public NicknameCheckResponseDto checkNicknameAvailabilityForUpdate(
-            Long currentUserId,
+            Long userId,
             String nickname
     ) {
-        log.debug("닉네임 중복 체크 (수정용) - currentUserId: {}, nickname: {}",
-                currentUserId, nickname);
+        log.debug("닉네임 중복 체크 (수정용) - userId: {}, nickname: {}", userId, nickname);
 
         // 1. 사용자 조회
-        User user = userRepository.findById(currentUserId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("닉네임 중복 체크 실패 - 존재하지 않는 사용자: userId={}", currentUserId);
+                    log.warn("닉네임 중복 체크 실패 - 존재하지 않는 사용자: userId={}", userId);
                     return new CustomException(ErrorCode.USER_NOT_FOUND);
                 });
 
@@ -148,7 +147,7 @@ public class UserService {
         }
 
         // 3. 다른 사람이 사용 중인지 확인 (본인 제외)
-        boolean exists = userRepository.existsByNicknameAndIdNot(nickname, currentUserId);
+        boolean exists = userRepository.existsByNicknameAndIdNot(nickname, userId);
 
         log.debug("닉네임 중복 체크 (수정용) 완료 - nickname={}, available={}", nickname, !exists);
 
@@ -193,7 +192,7 @@ public class UserService {
         }
 
         // 4. 이미지 처리
-        String finalImageUrl = handleImageUpdate(user, request.getProfileImage());
+        String finalImageUrl = handleImageUpdate(user, request.getImageUrl());
 
         try {
             // 5. 사용자 정보 업데이트 (JPA Dirty Checking)
@@ -328,8 +327,7 @@ public class UserService {
             } else {
                 // 새 이미지 저장
                 user.updateImageUrl(finalImageUrl);
-                log.debug("새 프로필 이미지 저장 완료 - userId: {}, imageUrl: {}",
-                        user.getId(), finalImageUrl);
+                log.debug("새 프로필 이미지 저장 완료 - userId: {}, imageUrl: {}", user.getId(), finalImageUrl);
             }
         }
     }

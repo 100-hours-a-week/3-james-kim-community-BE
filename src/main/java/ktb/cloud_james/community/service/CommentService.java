@@ -60,7 +60,7 @@ public class CommentService {
                 });
 
         // 1-2. 삭제된 게시글 체크
-        if (post.getDeletedAt() != null) {
+        if (post.isDeleted()) {
             log.warn("댓글 작성 실패 - 삭제된 게시글: postId={}", postId);
             throw new CustomException(ErrorCode.POST_NOT_FOUND);
         }
@@ -129,7 +129,7 @@ public class CommentService {
                     return new CustomException(ErrorCode.POST_NOT_FOUND);
                 });
 
-        if (post.getDeletedAt() != null) {
+        if (post.isDeleted()) {
             log.warn("댓글 조회 실패 - 삭제된 게시글: postId={}", postId);
             throw new CustomException(ErrorCode.POST_NOT_FOUND);
         }
@@ -194,20 +194,20 @@ public class CommentService {
                 });
 
         // 2. 삭제된 댓글 체크
-        if (comment.getDeletedAt() != null) {
+        if (comment.isDeleted()) {
             log.warn("댓글 수정 실패 - 삭제된 댓글: commentId={}", commentId);
             throw new CustomException(ErrorCode.COMMENT_NOT_FOUND);
         }
 
         // 3. 게시글 ID 일치 확인 (URL의 postId와 댓글의 postId 비교)
-        if (!comment.getPost().getId().equals(postId)) {
+        if (!comment.belongsToPost(postId)) {
             log.warn("댓글 수정 실패 - 게시글 불일치: commentId={}, urlPostId={}, actualPostId={}",
                     commentId, postId, comment.getPost().getId());
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
         // 4. 작성자 권한 확인
-        if (!comment.getUser().getId().equals(userId)) {
+        if (!comment.isAuthor(userId)) {
             log.warn("댓글 수정 실패 - 권한 없음: userId={}, commentId={}, authorId={}",
                     userId, commentId, comment.getUser().getId());
             throw new CustomException(ErrorCode.NOT_COMMENT_AUTHOR);
@@ -247,20 +247,20 @@ public class CommentService {
                 });
 
         // 2. 이미 삭제된 댓글 체크
-        if (comment.getDeletedAt() != null) {
+        if (comment.isDeleted()) {
             log.warn("댓글 삭제 실패 - 이미 삭제된 댓글: commentId={}", commentId);
             throw new CustomException(ErrorCode.COMMENT_NOT_FOUND);
         }
 
         // 3. 게시글 ID 일치 확인 (URL의 postId와 댓글의 postId 비교)
-        if (!comment.getPost().getId().equals(postId)) {
+        if (!comment.belongsToPost(postId)) {
             log.warn("댓글 삭제 실패 - 게시글 불일치: commentId={}, urlPostId={}, actualPostId={}",
                     commentId, postId, comment.getPost().getId());
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
         // 3-2. 작성자 권한 확인
-        if (!comment.getUser().getId().equals(userId)) {
+        if (!comment.isAuthor(userId)) {
             log.warn("댓글 삭제 실패 - 권한 없음: userId={}, commentId={}, authorId={}",
                     userId, commentId, comment.getUser().getId());
             throw new CustomException(ErrorCode.NOT_COMMENT_AUTHOR);

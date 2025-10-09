@@ -60,13 +60,26 @@ public class Comment {
         this.content = content;
     }
 
-    // ========== 비즈니스 로직 ==========
+    // ========== 비즈니스 메서드 ==========
 
+    // 댓글 내용 수정
     public void updateContent(String content) {
         this.content = content;
     }
 
     public void softDelete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    public boolean isAuthor(Long userId) {
+        return this.user.getId().equals(userId);
+    }
+
+    public boolean belongsToPost(Long postId) {
+        return this.post.getId().equals(postId);
+    }
+
+    public boolean isDeleted() {
+        return this.deletedAt != null;
     }
 }

@@ -62,17 +62,27 @@ public class Post {
         this.content = content;
     }
 
-    // ========== 비즈니스 로직 ==========
+    // ========== 비즈니스 메서드 ==========
 
+    // 게시글 제목 수정
     public void updateTitle(String title) {
         this.title = title;
     }
 
+    // 게시글 내용 수정
     public void updateContent(String content) {
         this.content = content;
     }
 
     public void softDelete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    public boolean isAuthor(Long userId) {
+        return this.user.getId().equals(userId);
+    }
+
+    public boolean isDeleted() {
+        return this.deletedAt != null;
     }
 }
