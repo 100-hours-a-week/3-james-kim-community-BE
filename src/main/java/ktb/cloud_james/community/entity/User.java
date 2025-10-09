@@ -65,4 +65,22 @@ public class User {
         this.nickname = nickname;
         this.imageUrl = imageUrl;
     }
+
+    // ========== 비즈니스 메서드 ==========
+
+    // 닉네임 수정
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    // 프로필 이미지 수정
+    public void updateImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    // 비밀번호 수정
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+        this.passwordChangedAt = LocalDateTime.now();
+    }
 }

@@ -15,6 +15,7 @@ public enum ErrorCode {
     // ========== 공통 ==========
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "invalid_request"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "internal_server_error"),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "forbidden"),
 
     // ========== 회원가입 관련 ==========
     PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "password_mismatch"),
