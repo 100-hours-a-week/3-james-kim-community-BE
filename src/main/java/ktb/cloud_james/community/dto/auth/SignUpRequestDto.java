@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -55,4 +56,13 @@ public class SignUpRequestDto {
     private String nickname;
 
     private String profileImage;
+
+    @Builder
+    public SignUpRequestDto(String email, String password, String passwordConfirm, String nickname, String profileImage) {
+        this.email = email;
+        this.password = password;
+        this.passwordConfirm = passwordConfirm;
+        this.nickname = nickname;
+        this.profileImage = profileImage;
+    }
 }
