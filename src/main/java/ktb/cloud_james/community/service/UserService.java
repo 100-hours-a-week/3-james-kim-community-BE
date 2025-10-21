@@ -4,10 +4,7 @@ import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
 import ktb.cloud_james.community.dto.auth.TokenDto;
-import ktb.cloud_james.community.dto.user.PasswordUpdateRequestDto;
-import ktb.cloud_james.community.dto.user.PasswordUpdateResponseDto;
-import ktb.cloud_james.community.dto.user.UserUpdateRequestDto;
-import ktb.cloud_james.community.dto.user.UserUpdateResponseDto;
+import ktb.cloud_james.community.dto.user.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
@@ -153,6 +150,30 @@ public class UserService {
         log.debug("닉네임 중복 체크 (수정용) 완료 - nickname={}, available={}", nickname, !exists);
 
         return new NicknameCheckResponseDto(!exists);
+    }
+
+    /**
+     * 사용자 정보 조회
+     * - 현재 로그인한 사용자 정보 반환
+     */
+    public UserInfoResponseDto getUserInfo(Long userId) {
+        log.info("사용자 정보 조회 - userId: {}", userId);
+
+        // 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.warn("사용자 정보 조회 실패 - 존재하지 않는 사용자: userId={}", userId);
+                    return new CustomException(ErrorCode.USER_NOT_FOUND);
+                });
+
+        log.info("사용자 정보 조회 완료 - userId: {}, email: {}, nickname: {}",
+                userId, user.getEmail(), user.getNickname());
+
+        return UserInfoResponseDto.builder()
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .imageUrl(user.getImageUrl())
+                .build();
     }
 
     /**

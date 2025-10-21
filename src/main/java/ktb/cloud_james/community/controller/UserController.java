@@ -5,10 +5,7 @@ import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
 import ktb.cloud_james.community.dto.common.ApiResponse;
-import ktb.cloud_james.community.dto.user.PasswordUpdateRequestDto;
-import ktb.cloud_james.community.dto.user.PasswordUpdateResponseDto;
-import ktb.cloud_james.community.dto.user.UserUpdateRequestDto;
-import ktb.cloud_james.community.dto.user.UserUpdateResponseDto;
+import ktb.cloud_james.community.dto.user.*;
 import ktb.cloud_james.community.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,6 +65,19 @@ public class UserController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("nickname_available", response));
+    }
+
+    /**
+     * 회원정보 조회 API (이메일, 닉네임, 프로필 이미지)
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserInfoResponseDto>> getUserInfo(
+            @AuthenticationPrincipal long userId) {
+
+        UserInfoResponseDto response = userService.getUserInfo(userId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success("user_info_retrieved", response));
     }
 
     /**
