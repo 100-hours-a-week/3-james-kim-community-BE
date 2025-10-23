@@ -1,5 +1,6 @@
 package ktb.cloud_james.community.global.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -82,6 +83,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 log.debug("사용자 인증 성공 - userId: {}", userId);
             }
+        } catch (ExpiredJwtException e) {
+            log.warn("만료된 JWT 토큰 - URI: {}", request.getRequestURI());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"message\":\"token_expired\",\"data\":null}");
+
+            return;
         } catch (Exception e) {
             log.error("JWT 인증 실패: {}", e.getMessage());
         }

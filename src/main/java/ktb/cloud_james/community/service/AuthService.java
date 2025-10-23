@@ -1,5 +1,6 @@
 package ktb.cloud_james.community.service;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.entity.UserToken;
@@ -130,18 +131,23 @@ public class AuthService {
         log.info("토큰 갱신 시도");
 
         // 1. Refresh Token JWT 자체 유효성 검증 (서명, 만료시간)
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
+        Long userId;
+        try {
+            // 2. JWT에서 userId 추출 (만료되어도 추출 가능)
+            userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+        } catch (ExpiredJwtException e) {
+            // JWT가 만료되어도 Claims에서 userId 추출 가능
+            userId = Long.parseLong(e.getClaims().getSubject());
+            log.info("만료된 JWT에서 userId 추출: {}", userId);
+        } catch (Exception e) {
             log.warn("토큰 갱신 실패 - 유효하지 않은 JWT");
             throw new CustomException(ErrorCode.INVALID_TOKEN);
         }
 
-        // 2. Refresh Token에서 userId 추출
-        Long userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
-
         // 3. User 조회
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("토큰 갱신 실패 - 존재하지 않는 사용자: {}", userId);
+                    log.warn("토큰 갱신 실패 - 존재하지 않는 사용자");
                     return new CustomException(ErrorCode.INVALID_TOKEN);
                 });
 
@@ -159,7 +165,7 @@ public class AuthService {
         // 5. DB에서 해당 User의 Refresh Token 조회
         UserToken userToken = userTokenRepository.findByUser(user)
                 .orElseThrow(() -> {
-                    log.warn("토큰 갱신 실패 - DB에 토큰 없음: userId={}", userId);
+                    log.warn("토큰 갱신 실패 - DB에 토큰 없음");
                     return new CustomException(ErrorCode.INVALID_TOKEN);
                 });
 

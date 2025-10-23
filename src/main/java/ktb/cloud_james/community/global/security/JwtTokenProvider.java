@@ -2,6 +2,7 @@ package ktb.cloud_james.community.global.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -101,7 +102,7 @@ public class JwtTokenProvider {
         return Long.parseLong(claims.getSubject());
     }
 
-    public boolean validateToken(String token) {
+    public boolean validateToken(String token) throws ExpiredJwtException {
         try {
             Jwts.parser()
                     .verifyWith(secretKey)
@@ -111,6 +112,7 @@ public class JwtTokenProvider {
 
         } catch (ExpiredJwtException e) {
             log.warn("만료된 JWT 토큰: {}", e.getMessage());
+            throw e;
         } catch (UnsupportedJwtException e) {
             log.warn("지원하지 않는 JWT 토큰: {}", e.getMessage());
         } catch (MalformedJwtException e) {
