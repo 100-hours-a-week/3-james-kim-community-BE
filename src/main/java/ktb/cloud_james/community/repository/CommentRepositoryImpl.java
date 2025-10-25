@@ -57,7 +57,7 @@ public class CommentRepositoryImpl implements CommentRepositoryCustom{
                         comment.deletedAt.isNull(),
                         cursorCondition(lastSeenId)
                 )
-                .orderBy(comment.id.desc())
+                .orderBy(comment.id.asc())
                 .limit(limit + 1)
                 .fetch();
     }

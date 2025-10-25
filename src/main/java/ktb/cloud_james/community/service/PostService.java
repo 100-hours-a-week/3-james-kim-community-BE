@@ -129,7 +129,7 @@ public class PostService {
 
         // 게시글 조회 (limit + 1개 조회하여 hasNext 판별)
         List<PostListResponseDto.PostSummaryDto> posts =
-                postRepository.findPostsWithCursor(lastSeenId, pageSize, currentUserId);
+                postRepository.findPostsWithCursor(lastSeenId, pageSize);
 
         // 탈퇴한 회원 마스킹 처리
         posts.forEach(PostListResponseDto.PostSummaryDto::maskDeletedUser);

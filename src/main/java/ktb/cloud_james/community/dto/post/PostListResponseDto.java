@@ -44,8 +44,6 @@ public class PostListResponseDto {
         private Long commentCount;
         private Long viewCount;
 
-        private Boolean isLiked;
-
         // 탈퇴한 회원이면 닉네임/이미지 변경
         public void maskDeletedUser() {
             if (isAuthorDeleted != null && isAuthorDeleted) {

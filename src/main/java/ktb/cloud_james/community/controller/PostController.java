@@ -58,7 +58,6 @@ public class PostController {
             @RequestParam(required = false) Integer limit,
             @AuthenticationPrincipal Long userId
     ) {
-
         PostListResponseDto response = postService.getPostList(lastSeenId, limit, userId);
 
         return ResponseEntity

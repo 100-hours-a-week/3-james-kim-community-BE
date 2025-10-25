@@ -60,6 +60,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll() // 회원가입만
                         .requestMatchers(HttpMethod.POST, "/api/images").permitAll() // 이미지 업로드만
+                        .requestMatchers(HttpMethod.GET, "/api/posts").permitAll() // 게시글 홈만
                         .requestMatchers("/temp/**", "/images/**").permitAll() // 정적 리소스
                         .requestMatchers("/policy/**").permitAll() // 정적 리소스
                         // 나머지는 인증 필요

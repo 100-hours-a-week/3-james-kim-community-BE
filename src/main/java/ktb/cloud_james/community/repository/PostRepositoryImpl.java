@@ -36,8 +36,7 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
     @Override
     public List<PostListResponseDto.PostSummaryDto> findPostsWithCursor(
             Long lastSeenId,
-            int limit,
-            Long currentUserId
+            int limit
     ) {
         return queryFactory
                 .select(Projections.constructor(
@@ -50,8 +49,7 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                         post.createdAt,
                         postStats.likeCount,
                         postStats.commentCount,
-                        postStats.viewCount,
-                        isLikedByUser(currentUserId)  // 좋아요 여부
+                        postStats.viewCount
                 ))
                 .from(post)
                 .join(post.user, user)                            // 작성자 정보 JOIN
