@@ -76,6 +76,6 @@ public class CommentRepositoryImpl implements CommentRepositoryCustom{
      *   → 결과: [40, 39, 38, 37, 36, 35, 34, 33, 32, 31] + hasNext(30 존재)
      */
     private BooleanExpression cursorCondition(Long lastSeenId) {
-        return lastSeenId != null ? comment.id.lt(lastSeenId) : null;
+        return lastSeenId != null ? comment.id.gt(lastSeenId) : null;
     }
 }

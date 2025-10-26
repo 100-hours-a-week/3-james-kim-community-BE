@@ -24,6 +24,21 @@ spring:
       max-file-size: 5MB      # 파일 하나당 최대 크기
       max-request-size: 5MB   # 요청 전체 최대 크기
 
+  # 타임리프 설정
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+  mvc:
+    static-path-pattern: /**
+
+  thymeleaf:
+    cache: false  # 개발 중에는 false (배포 시 true로 변경)
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+
 logging:
   level:
     org.hibernate.SQL: debug

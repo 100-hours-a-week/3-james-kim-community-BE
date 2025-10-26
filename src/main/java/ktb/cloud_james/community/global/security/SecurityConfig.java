@@ -63,6 +63,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/posts").permitAll() // 게시글 홈만
                         .requestMatchers("/temp/**", "/images/**").permitAll() // 정적 리소스
                         .requestMatchers("/policy/**").permitAll() // 정적 리소스
+                        .requestMatchers("/css/**", "/js/**", "/assets/**").permitAll()
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()
                 )
