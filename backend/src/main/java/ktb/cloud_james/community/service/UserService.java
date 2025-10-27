@@ -1,5 +1,6 @@
 package ktb.cloud_james.community.service;
 
+import jakarta.servlet.http.HttpServletRequest;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
@@ -9,23 +10,21 @@ import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
+import ktb.cloud_james.community.global.util.SessionUtil;
 import ktb.cloud_james.community.repository.UserRepository;
-import ktb.cloud_james.community.repository.UserTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.awt.*;
+
 
 /**
  * 사용자(User) 관련 비즈니스 로직
- * - 회원가입, 토큰 발급, 회원정보 수정, 비밀번호 수정 등
- *
- * @Transactional(readOnly = true):
- * - 클래스 레벨: 모든 메서드에 읽기 전용 트랜잭션 적용
- * - 조회 성능 최적화 (Dirty Checking 비활성화)
- * - 쓰기 작업이 필요한 메서드는 @Transactional로
+ * - 회원가입, 회원정보 수정, 비밀번호 수정, 회원탈퇴
+ * - 세션 기반 인증 방식 사용
  */
 @Service
 @Slf4j
@@ -34,49 +33,44 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final UserTokenRepository userTokenRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
-    private final AuthService authService;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * 회원가입 처리 흐름:
-     * 1. 비밀번호 일치 검증
-     * 2. 이메일/닉네임 중복 체크
-     * 3. 비밀번호 암호화
-     * 4. 임시 이미지 → 정식 디렉토리 이동
-     * 5. User 저장
-     * 6. Access Token, Refresh Token 발급
-     * 7. Refresh Token DB 저장
-     * 8. 실패 시 이동한 이미지 삭제
+     * 1. 비밀번호 확인 검증
+     * 2. 이메일 중복 체크
+     * 3. 닉네임 중복 체크
+     * 4. 프로필 이미지 처리 (임시 -> 정식)
+     * 5. User 엔티티 생성 및 저장
+     * 6. 세션 생성
+     * 7. 응답 DTO 생성
      */
     @Transactional
-    public SignUpResponseDto signUp(SignUpRequestDto request) {
-        log.info("회원가입 시도 - email: {}, nickname: {}", request.getEmail(), request.getNickname());
+    public SignUpResponseDto signUp(SignUpRequestDto request, HttpServletRequest httpRequest) {
+        log.info("회원가입 시도 - email: {}", request.getEmail());
 
-        // 1. 비밀번호 일치 검증
+        // 1. 비밀번호 확인 검증
         if (!request.getPassword().equals(request.getPasswordConfirm())) {
+            log.warn("회원가입 실패 - 비밀번호 불일치: email={}", request.getEmail());
             throw new CustomException(ErrorCode.PASSWORD_MISMATCH);
         }
 
         // 2. 이메일 중복 체크
         if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("회원가입 실패 - 이메일 중복: email={}", request.getEmail());
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         // 3. 닉네임 중복 체크
         if (userRepository.existsByNickname(request.getNickname())) {
+            log.warn("회원가입 실패 - 닉네임 중복: nickname={}", request.getNickname());
             throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
         }
 
-        // 4. 비밀번호 암호화
-        String encodedPassword = passwordEncoder.encode(request.getPassword());
-
-        // 5. 임시 이미지 -> 정식 디렉토리 이동
+        // 4. 프로필 이미지 처리 (임시 -> 정식)
         String finalImageUrl = null;
         String tempImageUrl = request.getProfileImage();
-
         if (tempImageUrl != null && tempImageUrl.startsWith("/temp/")) {
             try {
                 finalImageUrl = imageService.moveToPermanent(tempImageUrl);
@@ -87,28 +81,22 @@ public class UserService {
         }
 
         try {
-            // 6. User 엔티티 생성 및 저장
+            // 5. User 엔티티 생성 및 저장
             User user = User.builder()
                     .email(request.getEmail())
-                    .password(encodedPassword)
+                    .password(passwordEncoder.encode(request.getPassword()))
                     .nickname(request.getNickname())
                     .imageUrl(finalImageUrl)
                     .build();
 
             User savedUser = userRepository.save(user);
 
-            // 7. 토큰 발급
-            TokenDto tokens = generateTokens(savedUser.getId());
-
-            // 8. Refresh Token DB 저장
-            authService.saveRefreshToken(savedUser, tokens.getRefreshToken());
-
             log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
-            return new SignUpResponseDto(
-                    savedUser.getId(),
-                    tokens.getAccessToken(),
-                    tokens.getRefreshToken());
+            // 6. 세션 생성
+            SessionUtil.createSession(httpRequest, savedUser.getId());
+
+            return new SignUpResponseDto(savedUser.getId());
 
         } catch (Exception e) {
             // DB 저장 실패 시 이미지 삭제 시도 (Best Effort)
@@ -122,7 +110,6 @@ public class UserService {
 
     /**
      * 닉네임 중복 체크 (회원정보 수정용)
-     * - JWT에서 추출한 userId로 본인 제외
      * - 본인의 현재 닉네임은 중복으로 간주하지 않음
      */
     public NicknameCheckResponseDto checkNicknameAvailabilityForUpdate(
@@ -153,21 +140,22 @@ public class UserService {
     }
 
     /**
-     * 사용자 정보 조회
-     * - 현재 로그인한 사용자 정보 반환
+     * 회원 정보 조회
      */
     public UserInfoResponseDto getUserInfo(Long userId) {
-        log.info("사용자 정보 조회 - userId: {}", userId);
+        log.info("회원 정보 조회 - userId: {}", userId);
 
         // 사용자 조회
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("사용자 정보 조회 실패 - 존재하지 않는 사용자: userId={}", userId);
+                    log.warn("회원 정보 조회 실패 - 존재하지 않는 사용자: userId={}", userId);
                     return new CustomException(ErrorCode.USER_NOT_FOUND);
                 });
 
-        log.info("사용자 정보 조회 완료 - userId: {}, email: {}, nickname: {}",
-                userId, user.getEmail(), user.getNickname());
+        if (user.isDeleted()) {
+            log.warn("회원정보 조회 실패 - 탈퇴한 사용자: userId={}", userId);
+            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        }
 
         return UserInfoResponseDto.builder()
                 .email(user.getEmail())
@@ -196,6 +184,11 @@ public class UserService {
                     return new CustomException(ErrorCode.USER_NOT_FOUND);
                 });
 
+        if (user.isDeleted()) {
+            log.warn("회원정보 수정 실패 - 탈퇴한 사용지: userId={}", userId);
+            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        }
+
         // 2. 수정 요청 검증 (최소 하나는 수정되어야 함)
         if (!request.hasAnyUpdate()) {
             log.warn("회원정보 수정 실패 - 수정할 내용 없음: userId={}", userId);
@@ -203,13 +196,10 @@ public class UserService {
         }
 
         // 3. 닉네임 중복 체크 (본인 제외)
-        if (request.getNickname() != null) {
-            // 기존 닉네임과 같으면 중복 체크 안 함
-            if (!request.getNickname().equals(user.getNickname())) {
-                if (userRepository.existsByNicknameAndIdNot(request.getNickname(), userId)) {
-                    log.warn("회원정보 수정 실패 - 닉네임 중복: nickname={}", request.getNickname());
-                    throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
-                }
+        if (request.getNickname() != null && !request.getNickname().equals(user.getNickname())) {
+            if (userRepository.existsByNicknameAndIdNot(request.getNickname(), userId)) {
+                log.warn("회원정보 수정 실패 - 닉네임 중복: nickname={}", request.getNickname());
+                throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
             }
         }
 
@@ -254,6 +244,11 @@ public class UserService {
                     return new CustomException(ErrorCode.USER_NOT_FOUND);
                 });
 
+        if (user.isDeleted()) {
+            log.warn("비밀번호 수정 실패 - 탈퇴한 사용자: userId={}", userId);
+            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        }
+
         // 2. 새 비밀번호 일치 여부 검증 (이중 검증)
         // 프론트에서 1차 실시간 검증, 서버에서 2차 검증
         if (!request.getNewPassword().equals(request.getNewPasswordConfirm())) {
@@ -284,7 +279,7 @@ public class UserService {
      * - User의 게시글/댓글은 유지 (작성자 표시: "탈퇴한 회원")
      */
     @Transactional
-    public void withdrawUser(Long userId) {
+    public void withdrawUser(Long userId, HttpServletRequest httpRequest) {
         log.info("회원탈퇴 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -304,12 +299,9 @@ public class UserService {
         user.withdraw(); // deleted_at 기록, is_active = false
         log.info("User Soft Delete 완료 - userId: {}", userId);
 
-        // 4. Refresh Token 삭제 (로그아웃 처리)
-        userTokenRepository.findByUser(user)
-                .ifPresent(userToken -> {
-                    userTokenRepository.delete(userToken);
-                    log.info("Refresh Token 삭제 완료 - userId: {}", userId);
-                });
+        // 세션 무효화
+        SessionUtil.invalidateSession(httpRequest);
+        log.info("세션 무효화 완료 - userId= {}", userId);
 
         // 5. 프로필 이미지 삭제
         if (user.getImageUrl() != null) {
@@ -325,16 +317,6 @@ public class UserService {
         log.info("회원탈퇴 완료 - userId: {}", userId);
     }
 
-
-
-    private TokenDto generateTokens(Long userId) {
-        String accessToken = jwtTokenProvider.createAccessToken(userId);
-        String refreshToken = jwtTokenProvider.createRefreshToken(userId);
-
-        log.debug("토큰 생성 완료 - userId: {}", userId);
-
-        return new TokenDto(accessToken, refreshToken);
-    }
 
     /**
      * 이미지 처리 로직
