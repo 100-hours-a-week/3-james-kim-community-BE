@@ -45,10 +45,10 @@ logging:
 #    org.springframework.security: debug
 
 # JWT 설정 추가
-jwt:
-  secret: ${JWT_SECRET}
-  access-token-validity: 3600000  # 1시간 (밀리초) - 임시
-  refresh-token-validity: 604800000  # 7일 (밀리초) - 임시
+#jwt:
+#  secret: ${JWT_SECRET}
+#  access-token-validity: 3600000  # 1시간 (밀리초) - 임시
+#  refresh-token-validity: 604800000  # 7일 (밀리초) - 임시
 
 # 파일 저장 경로
 file:
