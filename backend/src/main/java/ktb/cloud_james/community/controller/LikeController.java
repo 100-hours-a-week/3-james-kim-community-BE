@@ -1,12 +1,12 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.dto.like.LikeResponseDto;
 import ktb.cloud_james.community.service.LikeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,8 +33,10 @@ public class LikeController {
     @PostMapping
     public ResponseEntity<ApiResponse<LikeResponseDto>> like(
             @PathVariable Long postId,
-            @AuthenticationPrincipal Long userId
+            HttpServletRequest httpRequest
     ) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         LikeResponseDto response = likeService.like(userId, postId);
 

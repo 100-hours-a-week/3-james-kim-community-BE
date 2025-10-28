@@ -43,6 +43,9 @@ public class WebConfig implements WebMvcConfigurer {
                 .addResourceLocations("file:" + uploadDir + "/");
     }
 
+    /**
+     * CORS 설정
+     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")  // /api로 시작하는 모든 경로
@@ -55,19 +58,33 @@ public class WebConfig implements WebMvcConfigurer {
 
     /**
      * 인터셉터 등록
-     * - 인증이 필요한 API에 대해서만 인터셉터 적용
+     * - 기존 Spring Security 설정과 동일하게 URL별 접근 권한 설정
+     * - 인증이 필요한 API에만 인터셉터 적용
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authenticationInterceptor)
-                .addPathPatterns("/api/**") // 모든 API에 적용
+                .addPathPatterns("/api/**")  // 모든 API에 적용
                 .excludePathPatterns(
-                        // 인증 불필요한 경로 제외
-                        "/api/auth",
-                        "/api/auth/check-email",
-                        "/api/auth/check-nickname",
-                        "/api/users/",
-                        "/api/images"
+                        //인증 불필요한 경로
+                        // 인증 관련 (회원가입, 로그인, 중복 체크)
+                        "/api/auth",                        // POST: 로그인
+                        "/api/auth/check-email",            // GET: 이메일 중복 체크
+                        "/api/auth/check-nickname",         // GET: 닉네임 중복 체크 (회원가입용)
+
+                        "/api/users",                       // POST: 회원가입만 허용 (GET, PATCH, DELETE는 인증 필요)
+                        "/api/images",                      // POST: 이미지 업로드만 허용
+                        "/api/posts",                       // GET: 게시글 목록만 허용 (POST는 인증 필요)
+
+                        // 정적 리소스 (이미지 파일)
+                        "/temp/**",                         // 임시 이미지
+                        "/images/**",                       // 정식 이미지
+
+                        // 정책 페이지 등 정적 리소스
+                        "/policy/**",
+                        "/css/**",
+                        "/js/**",
+                        "/assets/**"
                 );
     }
 }

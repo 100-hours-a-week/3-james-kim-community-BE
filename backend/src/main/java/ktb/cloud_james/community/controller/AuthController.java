@@ -1,5 +1,7 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.dto.common.ApiResponse;
@@ -8,12 +10,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * 인증(Authentication) 관련 API 컨트롤러
- * - 중복 체크, 토큰 갱신, 로그인, 로그아웃 등
+ * - 세션 기반 인증 사용
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -25,25 +26,29 @@ public class AuthController {
 
     /**
      * 로그인 API
+     * - 세션 생성 및 쿠키 발급
      */
     @PostMapping
     public ResponseEntity<ApiResponse<LoginResponseDto>> login(
-            @Valid @RequestBody LoginRequestDto request) {
+            @Valid @RequestBody LoginRequestDto request,
+            HttpServletResponse response) {
 
-        LoginResponseDto response = authService.login(request);
+        LoginResponseDto responseDto = authService.login(request, response);
 
         return ResponseEntity
-                .ok(ApiResponse.success("login_success", response));
+                .ok(ApiResponse.success("login_success", responseDto));
     }
 
     /**
      * 로그아웃 API
+     * - 세션 만료 및 쿠키 제거
      */
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> logout(
-            @AuthenticationPrincipal Long userId) {
+            HttpServletRequest request,
+            HttpServletResponse response) {
 
-        authService.logout(userId);
+        authService.logout(request, response);
 
         return ResponseEntity
                 .ok(ApiResponse.success("logout_success", null));
@@ -93,15 +98,5 @@ public class AuthController {
 
         return ResponseEntity
                 .ok(ApiResponse.success("nickname_available", response));
-    }
-
-    @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<TokenDto>> refreshToken(
-            @Valid @RequestBody TokenRefreshRequestDto request) {
-
-        TokenDto tokens = authService.refreshAccessToken(request.getRefreshToken());
-
-        return ResponseEntity
-                .ok(ApiResponse.success("token_refreshed", tokens));
     }
 }

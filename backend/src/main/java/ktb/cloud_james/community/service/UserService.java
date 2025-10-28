@@ -1,24 +1,21 @@
 package ktb.cloud_james.community.service;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
-import ktb.cloud_james.community.dto.auth.TokenDto;
 import ktb.cloud_james.community.dto.user.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
-import ktb.cloud_james.community.global.security.JwtTokenProvider;
-import ktb.cloud_james.community.global.util.SessionUtil;
+import ktb.cloud_james.community.global.session.SessionManager;
 import ktb.cloud_james.community.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.awt.*;
 
 
 /**
@@ -35,6 +32,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final ImageService imageService;
     private final PasswordEncoder passwordEncoder;
+    private final SessionManager sessionManager;
 
     /**
      * 회원가입 처리 흐름:
@@ -47,7 +45,8 @@ public class UserService {
      * 7. 응답 DTO 생성
      */
     @Transactional
-    public SignUpResponseDto signUp(SignUpRequestDto request, HttpServletRequest httpRequest) {
+    public SignUpResponseDto signUp(SignUpRequestDto request,
+                                    HttpServletResponse response) {
         log.info("회원가입 시도 - email: {}", request.getEmail());
 
         // 1. 비밀번호 확인 검증
@@ -91,10 +90,10 @@ public class UserService {
 
             User savedUser = userRepository.save(user);
 
-            log.info("회원가입 성공 - userId: {}", savedUser.getId());
-
             // 6. 세션 생성
-            SessionUtil.createSession(httpRequest, savedUser.getId());
+            sessionManager.createSession(savedUser.getId(), response);
+
+            log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
             return new SignUpResponseDto(savedUser.getId());
 
@@ -279,7 +278,9 @@ public class UserService {
      * - User의 게시글/댓글은 유지 (작성자 표시: "탈퇴한 회원")
      */
     @Transactional
-    public void withdrawUser(Long userId, HttpServletRequest httpRequest) {
+    public void withdrawUser(Long userId,
+                             HttpServletRequest request,
+                             HttpServletResponse response) {
         log.info("회원탈퇴 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -299,9 +300,9 @@ public class UserService {
         user.withdraw(); // deleted_at 기록, is_active = false
         log.info("User Soft Delete 완료 - userId: {}", userId);
 
-        // 세션 무효화
-        SessionUtil.invalidateSession(httpRequest);
-        log.info("세션 무효화 완료 - userId= {}", userId);
+        // 4. 세션 만료
+        sessionManager.expire(request, response);
+        log.info("세션 만료 완료 - userId: {}", userId);
 
         // 5. 프로필 이미지 삭제
         if (user.getImageUrl() != null) {

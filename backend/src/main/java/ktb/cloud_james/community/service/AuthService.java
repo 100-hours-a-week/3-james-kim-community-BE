@@ -1,11 +1,12 @@
 package ktb.cloud_james.community.service;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
-import ktb.cloud_james.community.global.util.SessionUtil;
+import ktb.cloud_james.community.global.session.SessionManager;
 import ktb.cloud_james.community.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,17 +27,18 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionManager sessionManager;
 
     /**
      * 로그인
      * 1. 이메일로 사용자 조회
      * 2. 비밀번호 검증
      * 3. 계정 활성화 상태 확인
-     * 4. 세션 생성
+     * 4. 세션 생성 (쿠키 발급)
      * 5. 응답 DTO 생성
      */
     @Transactional
-    public LoginResponseDto login(LoginRequestDto request, HttpServletRequest httpRequest) {
+    public LoginResponseDto login(LoginRequestDto request, HttpServletResponse response) {
         log.info("로그인 시도 - email: {}", request.getEmail());
 
         // 1. 이메일로 사용자 조회
@@ -59,7 +61,7 @@ public class AuthService {
         }
 
         // 4. 세션 생성
-        SessionUtil.createSession(httpRequest, user.getId());
+        sessionManager.createSession(user.getId(), response);
 
         log.info("로그인 성공 - userId: {}, email: {}", user.getId(), request.getEmail());
 
@@ -71,12 +73,12 @@ public class AuthService {
      * 1. 세션 무효화
      */
     @Transactional
-    public void logout(HttpServletRequest httpRequest) {
-        Long userId = SessionUtil.getUserId(httpRequest);
+    public void logout(HttpServletRequest request, HttpServletResponse response) {
+        Long userId = sessionManager.getSession(request);
         log.info("로그아웃 시도 - userId: {}", userId);
 
         // 세션 무효화
-        SessionUtil.invalidateSession(httpRequest);
+        sessionManager.expire(request, response);
 
         log.info("로그아웃 성공 - userId: {}", userId);
     }
