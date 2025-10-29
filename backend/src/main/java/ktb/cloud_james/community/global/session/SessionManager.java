@@ -3,7 +3,6 @@ package ktb.cloud_james.community.global.session;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import ktb.cloud_james.community.global.constant.SessionConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,7 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 세션 관리 클래스
+ * 세션 관리 클래스 - 더 이상 사용안함: HttpSession 방식으로 전환
  * - 세션 생성, 조회, 만료
  */
 @Slf4j

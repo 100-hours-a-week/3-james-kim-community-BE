@@ -67,14 +67,6 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")  // 모든 API에 적용
                 .excludePathPatterns(
                         //인증 불필요한 경로
-                        // 인증 관련 (회원가입, 로그인, 중복 체크)
-                        "/api/auth",                        // POST: 로그인
-                        "/api/auth/check-email",            // GET: 이메일 중복 체크
-                        "/api/auth/check-nickname",         // GET: 닉네임 중복 체크 (회원가입용)
-
-                        "/api/users",                       // POST: 회원가입만 허용 (GET, PATCH, DELETE는 인증 필요)
-                        "/api/images",                      // POST: 이미지 업로드만 허용
-                        "/api/posts",                       // GET: 게시글 목록만 허용 (POST는 인증 필요)
 
                         // 정적 리소스 (이미지 파일)
                         "/temp/**",                         // 임시 이미지

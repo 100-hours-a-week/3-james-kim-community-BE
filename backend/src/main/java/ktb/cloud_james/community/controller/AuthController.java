@@ -31,12 +31,12 @@ public class AuthController {
     @PostMapping
     public ResponseEntity<ApiResponse<LoginResponseDto>> login(
             @Valid @RequestBody LoginRequestDto request,
-            HttpServletResponse response) {
+            HttpServletRequest httpRequest) {
 
-        LoginResponseDto responseDto = authService.login(request, response);
+        LoginResponseDto response = authService.login(request, httpRequest);
 
         return ResponseEntity
-                .ok(ApiResponse.success("login_success", responseDto));
+                .ok(ApiResponse.success("login_success", response));
     }
 
     /**
@@ -44,11 +44,9 @@ public class AuthController {
      * - 세션 만료 및 쿠키 제거
      */
     @DeleteMapping
-    public ResponseEntity<ApiResponse<Void>> logout(
-            HttpServletRequest request,
-            HttpServletResponse response) {
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest httpRequest) {
 
-        authService.logout(request, response);
+        authService.logout(httpRequest);
 
         return ResponseEntity
                 .ok(ApiResponse.success("logout_success", null));

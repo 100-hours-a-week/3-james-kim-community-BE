@@ -1,12 +1,11 @@
 package ktb.cloud_james.community.service;
 
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
-import ktb.cloud_james.community.global.session.SessionManager;
+import ktb.cloud_james.community.global.util.SessionUtil;
 import ktb.cloud_james.community.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +26,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final SessionManager sessionManager;
 
     /**
      * 로그인
@@ -38,7 +36,7 @@ public class AuthService {
      * 5. 응답 DTO 생성
      */
     @Transactional
-    public LoginResponseDto login(LoginRequestDto request, HttpServletResponse response) {
+    public LoginResponseDto login(LoginRequestDto request, HttpServletRequest httpRequest) {
         log.info("로그인 시도 - email: {}", request.getEmail());
 
         // 1. 이메일로 사용자 조회
@@ -61,7 +59,7 @@ public class AuthService {
         }
 
         // 4. 세션 생성
-        sessionManager.createSession(user.getId(), response);
+        SessionUtil.createSession(httpRequest, user.getId());
 
         log.info("로그인 성공 - userId: {}, email: {}", user.getId(), request.getEmail());
 
@@ -73,12 +71,12 @@ public class AuthService {
      * 1. 세션 무효화
      */
     @Transactional
-    public void logout(HttpServletRequest request, HttpServletResponse response) {
-        Long userId = sessionManager.getSession(request);
+    public void logout(HttpServletRequest httpRequest) {
+        Long userId = SessionUtil.getUserId(httpRequest);
         log.info("로그아웃 시도 - userId: {}", userId);
 
         // 세션 무효화
-        sessionManager.expire(request, response);
+        SessionUtil.invalidateSession(httpRequest);
 
         log.info("로그아웃 성공 - userId: {}", userId);
     }

@@ -12,6 +12,6 @@ public final class SessionConstants {
     // 세션에 저장되는 사용자 ID 키
     public static final String USER_ID = "USER_ID";
 
-    // 세션 쿠키 이름
+    // 세션 쿠키 이름 - 더 이상 사용안함: HttpSession 방식으로 전환
     public static final String SESSION_COOKIE_NAME = "MY_SESSION_ID";
 }

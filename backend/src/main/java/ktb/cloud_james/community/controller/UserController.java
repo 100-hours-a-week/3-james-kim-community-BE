@@ -36,13 +36,13 @@ public class UserController {
     @PostMapping
     public ResponseEntity<ApiResponse<SignUpResponseDto>> signUp(
             @Valid @RequestBody SignUpRequestDto request,
-            HttpServletResponse response) {
+            HttpServletRequest httpRequest) {
 
-        SignUpResponseDto responseDto = userService.signUp(request, response);
+        SignUpResponseDto response = userService.signUp(request, httpRequest);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(ApiResponse.success("signup_success", responseDto));
+                .body(ApiResponse.success("signup_success", response));
     }
 
     /**
@@ -115,12 +115,11 @@ public class UserController {
      */
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> withdrawUser(
-            @RequestAttribute("userId") Long userId,
-            HttpServletRequest request,
-            HttpServletResponse response
-    ) {
+            HttpServletRequest httpRequest) {
 
-        userService.withdrawUser(userId, request, response);
+        Long userId = (Long) httpRequest.getAttribute("userId");
+
+        userService.withdrawUser(userId, httpRequest);
 
         return ResponseEntity
                 .ok(ApiResponse.success("account_deleted", null));

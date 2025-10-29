@@ -10,6 +10,7 @@ import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.session.SessionManager;
+import ktb.cloud_james.community.global.util.SessionUtil;
 import ktb.cloud_james.community.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,6 @@ public class UserService {
     private final UserRepository userRepository;
     private final ImageService imageService;
     private final PasswordEncoder passwordEncoder;
-    private final SessionManager sessionManager;
 
     /**
      * 회원가입 처리 흐름:
@@ -46,7 +46,7 @@ public class UserService {
      */
     @Transactional
     public SignUpResponseDto signUp(SignUpRequestDto request,
-                                    HttpServletResponse response) {
+                                    HttpServletRequest httpRequest) {
         log.info("회원가입 시도 - email: {}", request.getEmail());
 
         // 1. 비밀번호 확인 검증
@@ -91,7 +91,7 @@ public class UserService {
             User savedUser = userRepository.save(user);
 
             // 6. 세션 생성
-            sessionManager.createSession(savedUser.getId(), response);
+            SessionUtil.createSession(httpRequest, savedUser.getId());
 
             log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
@@ -278,9 +278,7 @@ public class UserService {
      * - User의 게시글/댓글은 유지 (작성자 표시: "탈퇴한 회원")
      */
     @Transactional
-    public void withdrawUser(Long userId,
-                             HttpServletRequest request,
-                             HttpServletResponse response) {
+    public void withdrawUser(Long userId, HttpServletRequest httpRequest) {
         log.info("회원탈퇴 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -301,7 +299,7 @@ public class UserService {
         log.info("User Soft Delete 완료 - userId: {}", userId);
 
         // 4. 세션 만료
-        sessionManager.expire(request, response);
+        SessionUtil.invalidateSession(httpRequest);
         log.info("세션 만료 완료 - userId: {}", userId);
 
         // 5. 프로필 이미지 삭제

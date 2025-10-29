@@ -3,6 +3,7 @@ package ktb.cloud_james.community.global.interceptor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.global.session.SessionManager;
+import ktb.cloud_james.community.global.util.SessionUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -17,8 +18,6 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 @RequiredArgsConstructor
 public class AuthenticationInterceptor implements HandlerInterceptor {
-
-    private final SessionManager sessionManager;
 
     @Override
     public boolean preHandle(
@@ -43,7 +42,7 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        Long userId = sessionManager.getSession(request);
+        Long userId = SessionUtil.getUserId(request);
 
         if (userId == null) {
             log.warn("인증 실패 - 세션 없음: {}", uri);
