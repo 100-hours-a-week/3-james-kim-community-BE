@@ -2,17 +2,17 @@ package ktb.cloud_james.community.global.interceptor;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import ktb.cloud_james.community.global.session.SessionManager;
-import ktb.cloud_james.community.global.util.SessionUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * 인증 인터셉터
- * - 로그인 필요한 API에 대한 인증 확인
- * - 세션에 USER_ID가 있는지 확인
+ * 인가 인터셉터
+ * - URL + HTTP Method 조합으로 접근 권한 판단
+ * - Public API: 비로그인도 접근 가능
+ * - Private API: 로그인 필요
+ * - (향후 확장) ADMIN 전용 API: 관리자 권한 필요
  */
 @Slf4j
 @Component
@@ -28,33 +28,32 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
 
         String uri = request.getRequestURI();
         String method = request.getMethod();
+        Long userId = (Long) request.getAttribute("userId");
 
-        log.debug("인터셉터 실행 - URI: {}, Method: {}", uri, method);
+        log.debug("인가 확인 - URI: {}, Method: {}, userId: {}", uri, method, userId);
 
         // OPTIONS 요청은 인증 체크 스킵
         if("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
 
-        // 인증 불필요한 엔드포인트
+        // public API (비로그인 허용)
         if (isPublicEndpoint(uri, method)) {
             log.debug("인증 불필요한 엔드포인트 - URI: {}, Method: {}", uri, method);
             return true;
         }
 
-        Long userId = SessionUtil.getUserId(request);
-
+        // private API인데 비로그인 상태
         if (userId == null) {
-            log.warn("인증 실패 - 세션 없음: {}", uri);
+            log.warn("인가 실패 - 세션 없음, 로그인 필요: {}", uri);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"status\":\"error\",\"message\":\"unauthorized\",\"data\":null}");
             return false;
         }
 
-        // 인증 성공 - 컨트롤러에서 사용
-        request.setAttribute("userId", userId);
-        log.debug("인증 성공 - userId: {}, uri: {}", userId, uri);
+        // 인가 성공 - 컨트롤러에서 사용
+        log.debug("private API 접근 허용 - userId: {}, uri: {}", userId, uri);
 
         return true;
     }
@@ -83,13 +82,6 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
 
         // 4. 게시글 목록 조회 (GET만 허용)
         if (uri.equals("/api/posts") && "GET".equals(method)) {
-            return true;
-        }
-
-        // 5. 정적 리소스
-        if (uri.startsWith("/temp/") || uri.startsWith("/images/") ||
-                uri.startsWith("/policy/") || uri.startsWith("/css/") ||
-                uri.startsWith("/js/") || uri.startsWith("/assets/")) {
             return true;
         }
 

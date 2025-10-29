@@ -1,8 +1,11 @@
 package ktb.cloud_james.community.global.config;
 
+import ktb.cloud_james.community.global.filter.AuthenticationFilter;
 import ktb.cloud_james.community.global.interceptor.AuthenticationInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -10,15 +13,15 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Web MVC 설정 -> S3 쓰면 완전히 제거 하면 된다. 임시로 필요
- * - 정적 리소스 경로 설정
- * - 업로드된 이미지 파일을 HTTP로 제공
- * - 인증 인터셉터 등록
+ * Web MVC 설정
+ * - 필터: 세션 확인 (인증 - 로그인/비로그인)
+ * - 인터셉터: API 접근 권한 (인가 - URL+Method)
  */
 @Configuration
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
+    private final AuthenticationFilter authenticationFilter;
     private final AuthenticationInterceptor authenticationInterceptor;
 
     @Value("${file.temp-dir:uploads/temp}")
@@ -57,17 +60,29 @@ public class WebConfig implements WebMvcConfigurer {
     }
 
     /**
+     * 인증 필터 등록
+     * - API 요청에 대해 세션 존재 여부 확인
+     * - 접근 제어 없이 userId만 request에 저장
+     */
+    @Bean
+    public FilterRegistrationBean<AuthenticationFilter> authenticationFilterRegistration() {
+        FilterRegistrationBean<AuthenticationFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(authenticationFilter);
+        registration.addUrlPatterns("/api/*");
+        registration.setOrder(1);
+        return  registration;
+    }
+
+    /**
      * 인터셉터 등록
-     * - 기존 Spring Security 설정과 동일하게 URL별 접근 권한 설정
-     * - 인증이 필요한 API에만 인터셉터 적용
+     * - URL + Method 조합으로 실제 접근 제어
+     * - Public/Private API 구분
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authenticationInterceptor)
                 .addPathPatterns("/api/**")  // 모든 API에 적용
                 .excludePathPatterns(
-                        //인증 불필요한 경로
-
                         // 정적 리소스 (이미지 파일)
                         "/temp/**",                         // 임시 이미지
                         "/images/**",                       // 정식 이미지
