@@ -1,5 +1,6 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.comment.*;
 import ktb.cloud_james.community.dto.common.ApiResponse;
@@ -8,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -29,9 +29,10 @@ public class CommentController {
     @PostMapping
     public ResponseEntity<ApiResponse<CommentCreateResponseDto>> createComment(
             @PathVariable Long postId,
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody CommentCreateRequestDto request
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         CommentCreateResponseDto response = commentService.createComment(userId, postId, request);
 
@@ -51,14 +52,16 @@ public class CommentController {
             @PathVariable Long postId,
             @RequestParam(required = false) Long lastSeenId,
             @RequestParam(required = false) Integer limit,
-            @AuthenticationPrincipal Long userId
+            HttpServletRequest httpRequest
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         CommentListResponseDto response = commentService.getCommentList(postId, lastSeenId, limit, userId);
 
         return ResponseEntity
                 .ok(ApiResponse.success("comments_retrieved", response));
     }
+
 
     /**
      * 댓글 수정 API
@@ -67,9 +70,10 @@ public class CommentController {
     public ResponseEntity<ApiResponse<CommentUpdateResponseDto>> updateComment(
             @PathVariable Long postId,
             @PathVariable Long commentId,
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody CommentUpdateRequestDto request
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         CommentUpdateResponseDto response = commentService.updateComment(userId, postId, commentId, request);
 
@@ -84,8 +88,9 @@ public class CommentController {
     public ResponseEntity<ApiResponse<CommentDeleteResponseDto>> deleteComment(
             @PathVariable Long postId,
             @PathVariable Long commentId,
-            @AuthenticationPrincipal Long userId
+            HttpServletRequest httpRequest
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         CommentDeleteResponseDto response = commentService.deleteComment(userId, postId, commentId);
 

@@ -1,11 +1,14 @@
 package ktb.cloud_james.community.service;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
 import ktb.cloud_james.community.dto.auth.TokenDto;
 import ktb.cloud_james.community.dto.user.*;
 import ktb.cloud_james.community.entity.User;
+import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
@@ -16,6 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 
 /**
@@ -38,7 +47,6 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
-    private final AuthService authService;
 
     /**
      * 회원가입 처리 흐름:
@@ -52,7 +60,7 @@ public class UserService {
      * 8. 실패 시 이동한 이미지 삭제
      */
     @Transactional
-    public SignUpResponseDto signUp(SignUpRequestDto request) {
+    public SignUpResponseDto signUp(SignUpRequestDto request, HttpServletResponse response) {
         log.info("회원가입 시도 - email: {}, nickname: {}", request.getEmail(), request.getNickname());
 
         // 1. 비밀번호 일치 검증
@@ -98,17 +106,18 @@ public class UserService {
             User savedUser = userRepository.save(user);
 
             // 7. 토큰 발급
-            TokenDto tokens = generateTokens(savedUser.getId());
+            String accessToken = jwtTokenProvider.createAccessToken(savedUser.getId());
+            String refreshToken = jwtTokenProvider.createRefreshToken(savedUser.getId());
 
             // 8. Refresh Token DB 저장
-            authService.saveRefreshToken(savedUser, tokens.getRefreshToken());
+            saveRefreshToken(savedUser, refreshToken);
+
+            // 9. Refresh Token 쿠키 설정
+            addRefreshTokenCookie(response, refreshToken);
 
             log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
-            return new SignUpResponseDto(
-                    savedUser.getId(),
-                    tokens.getAccessToken(),
-                    tokens.getRefreshToken());
+            return new SignUpResponseDto(accessToken);
 
         } catch (Exception e) {
             // DB 저장 실패 시 이미지 삭제 시도 (Best Effort)
@@ -284,7 +293,7 @@ public class UserService {
      * - User의 게시글/댓글은 유지 (작성자 표시: "탈퇴한 회원")
      */
     @Transactional
-    public void withdrawUser(Long userId) {
+    public void withdrawUser(Long userId, HttpServletResponse response) {
         log.info("회원탈퇴 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -311,6 +320,8 @@ public class UserService {
                     log.info("Refresh Token 삭제 완료 - userId: {}", userId);
                 });
 
+        deleteRefreshTokenCookie(response);
+
         // 5. 프로필 이미지 삭제
         if (user.getImageUrl() != null) {
             try {
@@ -327,13 +338,65 @@ public class UserService {
 
 
 
-    private TokenDto generateTokens(Long userId) {
-        String accessToken = jwtTokenProvider.createAccessToken(userId);
-        String refreshToken = jwtTokenProvider.createRefreshToken(userId);
+    /**
+     * Refresh Token DB 저장
+     */
+    private void saveRefreshToken(User user, String refreshToken) {
+        LocalDateTime expiresAt = LocalDateTime.now()
+                .plusSeconds(jwtTokenProvider.getRefreshTokenValidity() / 1000);
 
-        log.debug("토큰 생성 완료 - userId: {}", userId);
+        // 기존 토큰 있으면 삭제
+        userTokenRepository.findByUser(user).ifPresent(userTokenRepository::delete);
 
-        return new TokenDto(accessToken, refreshToken);
+        // Refresh Token 암호화 (SHA-256 해시)
+        String hashedRefreshToken = hashRefreshToken(refreshToken);
+
+        // 새 Refresh Token 저장
+        UserToken userToken = UserToken.builder()
+                .user(user)
+                .refreshToken(hashedRefreshToken)
+                .expiresAt(expiresAt)
+                .build();
+
+        userTokenRepository.save(userToken);
+        log.debug("Refresh Token 저장 완료 - userId: {}", user.getId());
+    }
+
+    /**
+     * RefreshToken SHA-256 해싱
+     */
+    private String hashRefreshToken(String refreshToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            log.error("SHA-256 알고리즘을 찾을 수 없음", e);
+            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * RefreshToken 쿠키 추가
+     */
+    private void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie("refreshToken", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false); // HTTPS 환경에서는 true로 설정
+        cookie.setPath("/");
+        cookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+        response.addCookie(cookie);
+    }
+
+    /**
+     * RefreshToken 쿠키 삭제
+     */
+    private void deleteRefreshTokenCookie(HttpServletResponse response) {
+        Cookie cookie = new Cookie("refreshToken", null);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);  // 즉시 만료
+        response.addCookie(cookie);
     }
 
     /**

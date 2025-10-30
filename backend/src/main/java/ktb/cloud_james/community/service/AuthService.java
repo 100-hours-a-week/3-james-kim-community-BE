@@ -1,6 +1,8 @@
 package ktb.cloud_james.community.service;
 
 import io.jsonwebtoken.ExpiredJwtException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.entity.UserToken;
@@ -46,7 +48,7 @@ public class AuthService {
      * 4. 토큰 발급
      */
     @Transactional
-    public LoginResponseDto login(LoginRequestDto request) {
+    public LoginResponseDto login(LoginRequestDto request, HttpServletResponse response) {
         log.info("로그인 시도 - email: {}", request.getEmail());
 
         // 1. 이메일로 사용자 조회
@@ -58,8 +60,7 @@ public class AuthService {
 
         // 2. 탈퇴/비활성 회원 차단 (회원탈퇴 후 추가된 로직)
         if (user.isDeleted() || !user.getIsActive()) {
-            log.warn("로그인 실패 - 탈퇴 또는 비활성 회원: email={}, isDeleted={}, isActive={}",
-                    request.getEmail(), user.isDeleted(), user.getIsActive());
+            log.warn("로그인 실패 - 탈퇴 또는 비활성 회원: email={}", request.getEmail());
             throw new CustomException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
@@ -76,9 +77,12 @@ public class AuthService {
         // 5. Refresh Token DB 저장 (기존 토큰 있으면 갱신)
         saveRefreshToken(user, refreshToken);
 
+        // 6. addRefreshToken 쿠키 설정
+        addRefreshTokenCookie(response, refreshToken);
+
         log.info("로그인 성공 - userId: {}", user.getId());
 
-        return new LoginResponseDto(user.getId(), accessToken, refreshToken);
+        return new LoginResponseDto(accessToken);
     }
 
     /**
@@ -87,7 +91,7 @@ public class AuthService {
      * 2. DB에서 해당 사용자의 Refresh Token 삭제
      */
     @Transactional
-    public void logout(Long userId) {
+    public void logout(Long userId, HttpServletResponse response) {
         log.info("로그아웃 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -103,6 +107,9 @@ public class AuthService {
                     userTokenRepository.delete(userToken);
                     log.info("Refresh Token 삭제 완료 - userId: {}", userId);
                 });
+
+        // RefreshToken 쿠키 제거
+        deleteRefreshTokenCookie(response);
 
         log.info("로그아웃 성공 - userId: {}", userId);
     }
@@ -126,6 +133,9 @@ public class AuthService {
         return new NicknameCheckResponseDto(!exists);
     }
 
+    /**
+     *
+     */
     @Transactional
     public TokenDto refreshAccessToken(String refreshToken) {
         log.info("토큰 갱신 시도");
@@ -185,12 +195,12 @@ public class AuthService {
         }
 
         // 8. 새로운 Access Token 발급
-        String newAccessToken = jwtTokenProvider.createAccessToken(userId);
+        String newAccessToken = jwtTokenProvider.createAccessToken(user.getId());
 
         log.info("토큰 갱신 성공 - userId: {}", userId);
 
         // Refresh Token은 그대로 사용
-        return new TokenDto(newAccessToken, refreshToken);
+        return new TokenDto(newAccessToken);
     }
 
     /**
@@ -198,14 +208,13 @@ public class AuthService {
      * - 기존 토큰 있으면 삭제 후 새로 저장
      * - 한 유저당 하나의 Refresh Token을 암호화하여 유지 (우선 단일 기기로 설정)
      */
-    public void saveRefreshToken(User user, String refreshToken) {
+    private void saveRefreshToken(User user, String refreshToken) {
         // Refresh Token 만료 시간 계산
         LocalDateTime expiresAt = LocalDateTime.now()
                 .plusSeconds(jwtTokenProvider.getRefreshTokenValidity() / 1000);
 
         // 기존 토큰 있으면 삭제
-        userTokenRepository.findByUser(user)
-                .ifPresent(userTokenRepository::delete);
+        userTokenRepository.findByUser(user).ifPresent(userTokenRepository::delete);
 
         // Refresh Token 암호화 (SHA-256 해시)
         String hashedRefreshToken = hashRefreshToken(refreshToken);
@@ -235,4 +244,28 @@ public class AuthService {
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
+
+    /**
+     * RefreshToken 쿠키 추가
+     */
+    private void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie("refreshToken", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false); // HTTPS 환경에서는 true로 설정
+        cookie.setPath("/");
+        cookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+        response.addCookie(cookie);
+    }
+
+    /**
+     * RefreshToken 쿠키 삭제
+     */
+    private void deleteRefreshTokenCookie(HttpServletResponse response) {
+        Cookie cookie = new Cookie("refreshToken", null);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+    }
+
 }

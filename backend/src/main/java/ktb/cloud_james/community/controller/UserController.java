@@ -1,5 +1,7 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
@@ -11,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -36,13 +37,14 @@ public class UserController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<SignUpResponseDto>> signUp(
-            @Valid @RequestBody SignUpRequestDto request) {
+            @Valid @RequestBody SignUpRequestDto request,
+            HttpServletResponse response) {
 
-        SignUpResponseDto response = userService.signUp(request);
+        SignUpResponseDto signUpResponse = userService.signUp(request, response);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(ApiResponse.success("signup_success", response));
+                .body(ApiResponse.success("signup_success", signUpResponse));
     }
 
     /**
@@ -50,8 +52,10 @@ public class UserController {
      */
     @GetMapping("/check-nickname")
     public ResponseEntity<ApiResponse<NicknameCheckResponseDto>> checkNicknameForUpdate(
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @RequestParam String nickname) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         NicknameCheckResponseDto response = userService.checkNicknameAvailabilityForUpdate(
                 userId, nickname
@@ -72,7 +76,9 @@ public class UserController {
      */
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserInfoResponseDto>> getUserInfo(
-            @AuthenticationPrincipal long userId) {
+            HttpServletRequest httpRequest) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         UserInfoResponseDto response = userService.getUserInfo(userId);
 
@@ -85,8 +91,10 @@ public class UserController {
      */
     @PatchMapping
     public ResponseEntity<ApiResponse<UserUpdateResponseDto>> updateUser(
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody UserUpdateRequestDto request) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         UserUpdateResponseDto response = userService.updateUser(userId, request);
 
@@ -99,8 +107,10 @@ public class UserController {
      */
     @PutMapping("/password")
     public ResponseEntity<ApiResponse<PasswordUpdateResponseDto>> updatePassword(
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody PasswordUpdateRequestDto request) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         PasswordUpdateResponseDto response = userService.updatePassword(userId, request);
 
@@ -113,9 +123,12 @@ public class UserController {
      */
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> withdrawUser(
-            @AuthenticationPrincipal Long currentUserId) {
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) {
 
-        userService.withdrawUser(currentUserId);
+        Long userId = (Long) httpRequest.getAttribute("userId");
+
+        userService.withdrawUser(userId, response);
 
         return ResponseEntity
                 .ok(ApiResponse.success("account_deleted", null));

@@ -1,15 +1,14 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.common.ApiResponse;
 import ktb.cloud_james.community.dto.post.*;
 import ktb.cloud_james.community.service.PostService;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -35,8 +34,10 @@ public class PostController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<PostCreateResponseDto>> createPost(
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody PostCreateRequestDto request) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         PostCreateResponseDto response = postService.createPost(userId, request);
 
@@ -56,8 +57,10 @@ public class PostController {
     public ResponseEntity<ApiResponse<PostListResponseDto>> getPostList(
             @RequestParam(required = false) Long lastSeenId,
             @RequestParam(required = false) Integer limit,
-            @AuthenticationPrincipal Long userId
+            HttpServletRequest httpRequest
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
+
         PostListResponseDto response = postService.getPostList(lastSeenId, limit, userId);
 
         return ResponseEntity
@@ -70,8 +73,9 @@ public class PostController {
     @GetMapping("/{postId}")
     public ResponseEntity<ApiResponse<PostDetailResponseDto>> getPostDetail(
             @PathVariable Long postId,
-            @AuthenticationPrincipal Long userId
+            HttpServletRequest httpRequest
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         PostDetailResponseDto response = postService.getPostDetail(postId, userId);
 
@@ -89,9 +93,10 @@ public class PostController {
     @PatchMapping("/{postId}")
     public ResponseEntity<ApiResponse<PostUpdateResponseDto>> updatePost(
             @PathVariable Long postId,
-            @AuthenticationPrincipal Long userId,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody PostUpdateRequestDto request
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         PostUpdateResponseDto response = postService.updatePost(userId, postId, request);
 
@@ -107,12 +112,13 @@ public class PostController {
     @DeleteMapping("/{postId}")
     public ResponseEntity<ApiResponse<Void>> deletePost(
             @PathVariable Long postId,
-            @AuthenticationPrincipal Long userId
+            HttpServletRequest httpRequest
     ) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         postService.deletePost(userId, postId);
 
         return ResponseEntity
-                .ok(ApiResponse.success("post_deleted"));
+                .ok(ApiResponse.success("post_deleted", null));
     }
 }
