@@ -33,7 +33,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     // 필터링 제외 경로 목록
     private static final String[] EXCLUDED_PATHS = {
-            "/api/auth",
             "/api/images",
             "/temp/",
             "/images/",
@@ -51,6 +50,26 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         // OPTIONS 요청 필터링 제외
         if ("OPTIONS".equalsIgnoreCase(method)) {
+            return true;
+        }
+
+        // POST /api/auth (로그인)만 필터 제외
+        if ("/api/auth".equals(path) && "POST".equalsIgnoreCase(method)) {
+            return true;
+        }
+
+        // GET /api/auth/check-email (이메일 중복 체크)만 필터 제외
+        if ("/api/auth/check-email".equals(path) && "GET".equalsIgnoreCase(method)) {
+            return true;
+        }
+
+        // GET /api/auth/check-nickname (닉네임 중복 체크)만 필터 제외
+        if ("/api/auth/check-nickname".equals(path) && "GET".equalsIgnoreCase(method)) {
+            return true;
+        }
+
+        // POST /api/auth/refresh (토큰 갱신)는 쿠키로 처리하므로 필터 제외
+        if ("/api/auth/refresh".equals(path) && "POST".equalsIgnoreCase(method)) {
             return true;
         }
 
