@@ -9,6 +9,8 @@ import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
+import ktb.cloud_james.community.global.util.CookieUtil;
+import ktb.cloud_james.community.global.util.TokenUtil;
 import ktb.cloud_james.community.repository.UserRepository;
 import ktb.cloud_james.community.repository.UserTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,7 @@ public class AuthService {
     private final UserTokenRepository userTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final TokenUtil tokenUtil;
 
     /**
      * 로그인
@@ -75,10 +78,10 @@ public class AuthService {
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
 
         // 5. Refresh Token DB 저장 (기존 토큰 있으면 갱신)
-        saveRefreshToken(user, refreshToken);
+        tokenUtil.saveRefreshToken(user, refreshToken);
 
         // 6. addRefreshToken 쿠키 설정
-        addRefreshTokenCookie(response, refreshToken);
+        CookieUtil.addRefreshTokenCookie(response, refreshToken);
 
         log.info("로그인 성공 - userId: {}", user.getId());
 
@@ -109,7 +112,7 @@ public class AuthService {
                 });
 
         // RefreshToken 쿠키 제거
-        deleteRefreshTokenCookie(response);
+       CookieUtil.deleteRefreshTokenCookie(response);
 
         log.info("로그아웃 성공 - userId: {}", userId);
     }
@@ -180,7 +183,7 @@ public class AuthService {
                 });
 
         // 6. 클라이언트가 보낸 Refresh Token과 DB의 암호화된 토큰 비교
-        String hashedRefreshToken = hashRefreshToken(refreshToken);
+        String hashedRefreshToken = tokenUtil.hashRefreshToken(refreshToken);
         if (!hashedRefreshToken.equals(userToken.getRefreshToken())) {
             log.warn("토큰 갱신 실패 - 토큰 불일치: userId={}", userId);
             throw new CustomException(ErrorCode.INVALID_TOKEN);
@@ -201,71 +204,6 @@ public class AuthService {
 
         // Refresh Token은 그대로 사용
         return new TokenDto(newAccessToken);
-    }
-
-    /**
-     * Refresh Token DB 저장
-     * - 기존 토큰 있으면 삭제 후 새로 저장
-     * - 한 유저당 하나의 Refresh Token을 암호화하여 유지 (우선 단일 기기로 설정)
-     */
-    private void saveRefreshToken(User user, String refreshToken) {
-        // Refresh Token 만료 시간 계산
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusSeconds(jwtTokenProvider.getRefreshTokenValidity() / 1000);
-
-        // 기존 토큰 있으면 삭제
-        userTokenRepository.findByUser(user).ifPresent(userTokenRepository::delete);
-
-        // Refresh Token 암호화 (SHA-256 해시)
-        String hashedRefreshToken = hashRefreshToken(refreshToken);
-
-        // 새 Refresh Token 저장
-        UserToken userToken = UserToken.builder()
-                .user(user)
-                .refreshToken(hashedRefreshToken)
-                .expiresAt(expiresAt)
-                .build();
-
-        userTokenRepository.save(userToken);
-
-        log.debug("Refresh Token 저장 완료 - userId: {}", user.getId());
-    }
-
-    /**
-     * Refresh Token을 SHA-256으로 해시
-     */
-    private String hashRefreshToken(String refreshToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            log.error("SHA-256 알고리즘을 찾을 수 없음", e);
-            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * RefreshToken 쿠키 추가
-     */
-    private void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // HTTPS 환경에서는 true로 설정
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60); // 7일
-        response.addCookie(cookie);
-    }
-
-    /**
-     * RefreshToken 쿠키 삭제
-     */
-    private void deleteRefreshTokenCookie(HttpServletResponse response) {
-        Cookie cookie = new Cookie("refreshToken", null);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
     }
 
 }

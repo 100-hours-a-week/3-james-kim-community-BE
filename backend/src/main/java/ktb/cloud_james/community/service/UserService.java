@@ -12,6 +12,8 @@ import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
+import ktb.cloud_james.community.global.util.CookieUtil;
+import ktb.cloud_james.community.global.util.TokenUtil;
 import ktb.cloud_james.community.repository.UserRepository;
 import ktb.cloud_james.community.repository.UserTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +49,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
+    private final TokenUtil tokenUtil;
 
     /**
      * 회원가입 처리 흐름:
@@ -110,10 +113,10 @@ public class UserService {
             String refreshToken = jwtTokenProvider.createRefreshToken(savedUser.getId());
 
             // 8. Refresh Token DB 저장
-            saveRefreshToken(savedUser, refreshToken);
+            tokenUtil.saveRefreshToken(savedUser, refreshToken);
 
             // 9. Refresh Token 쿠키 설정
-            addRefreshTokenCookie(response, refreshToken);
+            CookieUtil.addRefreshTokenCookie(response, refreshToken);
 
             log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
@@ -320,7 +323,7 @@ public class UserService {
                     log.info("Refresh Token 삭제 완료 - userId: {}", userId);
                 });
 
-        deleteRefreshTokenCookie(response);
+        CookieUtil.deleteRefreshTokenCookie(response);
 
         // 5. 프로필 이미지 삭제
         if (user.getImageUrl() != null) {
@@ -334,69 +337,6 @@ public class UserService {
         }
 
         log.info("회원탈퇴 완료 - userId: {}", userId);
-    }
-
-
-
-    /**
-     * Refresh Token DB 저장
-     */
-    private void saveRefreshToken(User user, String refreshToken) {
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusSeconds(jwtTokenProvider.getRefreshTokenValidity() / 1000);
-
-        // 기존 토큰 있으면 삭제
-        userTokenRepository.findByUser(user).ifPresent(userTokenRepository::delete);
-
-        // Refresh Token 암호화 (SHA-256 해시)
-        String hashedRefreshToken = hashRefreshToken(refreshToken);
-
-        // 새 Refresh Token 저장
-        UserToken userToken = UserToken.builder()
-                .user(user)
-                .refreshToken(hashedRefreshToken)
-                .expiresAt(expiresAt)
-                .build();
-
-        userTokenRepository.save(userToken);
-        log.debug("Refresh Token 저장 완료 - userId: {}", user.getId());
-    }
-
-    /**
-     * RefreshToken SHA-256 해싱
-     */
-    private String hashRefreshToken(String refreshToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            log.error("SHA-256 알고리즘을 찾을 수 없음", e);
-            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * RefreshToken 쿠키 추가
-     */
-    private void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // HTTPS 환경에서는 true로 설정
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60); // 7일
-        response.addCookie(cookie);
-    }
-
-    /**
-     * RefreshToken 쿠키 삭제
-     */
-    private void deleteRefreshTokenCookie(HttpServletResponse response) {
-        Cookie cookie = new Cookie("refreshToken", null);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);  // 즉시 만료
-        response.addCookie(cookie);
     }
 
     /**
