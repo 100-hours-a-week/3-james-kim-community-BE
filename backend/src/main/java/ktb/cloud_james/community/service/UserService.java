@@ -1,14 +1,19 @@
 package ktb.cloud_james.community.service;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
 import ktb.cloud_james.community.dto.auth.TokenDto;
 import ktb.cloud_james.community.dto.user.*;
 import ktb.cloud_james.community.entity.User;
+import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
+import ktb.cloud_james.community.global.util.CookieUtil;
+import ktb.cloud_james.community.global.util.TokenUtil;
 import ktb.cloud_james.community.repository.UserRepository;
 import ktb.cloud_james.community.repository.UserTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +21,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 
 /**
@@ -38,7 +49,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final ImageService imageService;
-    private final AuthService authService;
+    private final TokenUtil tokenUtil;
 
     /**
      * 회원가입 처리 흐름:
@@ -52,7 +63,7 @@ public class UserService {
      * 8. 실패 시 이동한 이미지 삭제
      */
     @Transactional
-    public SignUpResponseDto signUp(SignUpRequestDto request) {
+    public SignUpResponseDto signUp(SignUpRequestDto request, HttpServletResponse response) {
         log.info("회원가입 시도 - email: {}, nickname: {}", request.getEmail(), request.getNickname());
 
         // 1. 비밀번호 일치 검증
@@ -98,17 +109,18 @@ public class UserService {
             User savedUser = userRepository.save(user);
 
             // 7. 토큰 발급
-            TokenDto tokens = generateTokens(savedUser.getId());
+            String accessToken = jwtTokenProvider.createAccessToken(savedUser.getId());
+            String refreshToken = jwtTokenProvider.createRefreshToken(savedUser.getId());
 
             // 8. Refresh Token DB 저장
-            authService.saveRefreshToken(savedUser, tokens.getRefreshToken());
+            tokenUtil.saveRefreshToken(savedUser, refreshToken);
+
+            // 9. Refresh Token 쿠키 설정
+            CookieUtil.addRefreshTokenCookie(response, refreshToken);
 
             log.info("회원가입 성공 - userId: {}", savedUser.getId());
 
-            return new SignUpResponseDto(
-                    savedUser.getId(),
-                    tokens.getAccessToken(),
-                    tokens.getRefreshToken());
+            return new SignUpResponseDto(accessToken);
 
         } catch (Exception e) {
             // DB 저장 실패 시 이미지 삭제 시도 (Best Effort)
@@ -284,7 +296,7 @@ public class UserService {
      * - User의 게시글/댓글은 유지 (작성자 표시: "탈퇴한 회원")
      */
     @Transactional
-    public void withdrawUser(Long userId) {
+    public void withdrawUser(Long userId, HttpServletResponse response) {
         log.info("회원탈퇴 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -311,6 +323,8 @@ public class UserService {
                     log.info("Refresh Token 삭제 완료 - userId: {}", userId);
                 });
 
+        CookieUtil.deleteRefreshTokenCookie(response);
+
         // 5. 프로필 이미지 삭제
         if (user.getImageUrl() != null) {
             try {
@@ -323,17 +337,6 @@ public class UserService {
         }
 
         log.info("회원탈퇴 완료 - userId: {}", userId);
-    }
-
-
-
-    private TokenDto generateTokens(Long userId) {
-        String accessToken = jwtTokenProvider.createAccessToken(userId);
-        String refreshToken = jwtTokenProvider.createRefreshToken(userId);
-
-        log.debug("토큰 생성 완료 - userId: {}", userId);
-
-        return new TokenDto(accessToken, refreshToken);
     }
 
     /**

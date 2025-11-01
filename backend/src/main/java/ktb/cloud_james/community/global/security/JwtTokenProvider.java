@@ -24,6 +24,8 @@ public class JwtTokenProvider {
 
     private final SecretKey secretKey;
     private final long accessTokenValidity;
+
+    @Getter
     private final long refreshTokenValidity;
 
     /**

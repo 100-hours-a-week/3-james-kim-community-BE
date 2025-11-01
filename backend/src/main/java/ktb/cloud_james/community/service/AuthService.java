@@ -1,12 +1,16 @@
 package ktb.cloud_james.community.service;
 
 import io.jsonwebtoken.ExpiredJwtException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.*;
 import ktb.cloud_james.community.entity.User;
 import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
+import ktb.cloud_james.community.global.util.CookieUtil;
+import ktb.cloud_james.community.global.util.TokenUtil;
 import ktb.cloud_james.community.repository.UserRepository;
 import ktb.cloud_james.community.repository.UserTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,7 @@ public class AuthService {
     private final UserTokenRepository userTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final TokenUtil tokenUtil;
 
     /**
      * 로그인
@@ -46,7 +51,7 @@ public class AuthService {
      * 4. 토큰 발급
      */
     @Transactional
-    public LoginResponseDto login(LoginRequestDto request) {
+    public LoginResponseDto login(LoginRequestDto request, HttpServletResponse response) {
         log.info("로그인 시도 - email: {}", request.getEmail());
 
         // 1. 이메일로 사용자 조회
@@ -58,8 +63,7 @@ public class AuthService {
 
         // 2. 탈퇴/비활성 회원 차단 (회원탈퇴 후 추가된 로직)
         if (user.isDeleted() || !user.getIsActive()) {
-            log.warn("로그인 실패 - 탈퇴 또는 비활성 회원: email={}, isDeleted={}, isActive={}",
-                    request.getEmail(), user.isDeleted(), user.getIsActive());
+            log.warn("로그인 실패 - 탈퇴 또는 비활성 회원: email={}", request.getEmail());
             throw new CustomException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
@@ -74,11 +78,14 @@ public class AuthService {
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
 
         // 5. Refresh Token DB 저장 (기존 토큰 있으면 갱신)
-        saveRefreshToken(user, refreshToken);
+        tokenUtil.saveRefreshToken(user, refreshToken);
+
+        // 6. addRefreshToken 쿠키 설정
+        CookieUtil.addRefreshTokenCookie(response, refreshToken);
 
         log.info("로그인 성공 - userId: {}", user.getId());
 
-        return new LoginResponseDto(user.getId(), accessToken, refreshToken);
+        return new LoginResponseDto(accessToken);
     }
 
     /**
@@ -87,7 +94,7 @@ public class AuthService {
      * 2. DB에서 해당 사용자의 Refresh Token 삭제
      */
     @Transactional
-    public void logout(Long userId) {
+    public void logout(Long userId, HttpServletResponse response) {
         log.info("로그아웃 시도 - userId: {}", userId);
 
         // 1. 사용자 조회
@@ -103,6 +110,9 @@ public class AuthService {
                     userTokenRepository.delete(userToken);
                     log.info("Refresh Token 삭제 완료 - userId: {}", userId);
                 });
+
+        // RefreshToken 쿠키 제거
+        CookieUtil.deleteRefreshTokenCookie(response);
 
         log.info("로그아웃 성공 - userId: {}", userId);
     }
@@ -126,6 +136,9 @@ public class AuthService {
         return new NicknameCheckResponseDto(!exists);
     }
 
+    /**
+     *
+     */
     @Transactional
     public TokenDto refreshAccessToken(String refreshToken) {
         log.info("토큰 갱신 시도");
@@ -170,7 +183,7 @@ public class AuthService {
                 });
 
         // 6. 클라이언트가 보낸 Refresh Token과 DB의 암호화된 토큰 비교
-        String hashedRefreshToken = hashRefreshToken(refreshToken);
+        String hashedRefreshToken = tokenUtil.hashRefreshToken(refreshToken);
         if (!hashedRefreshToken.equals(userToken.getRefreshToken())) {
             log.warn("토큰 갱신 실패 - 토큰 불일치: userId={}", userId);
             throw new CustomException(ErrorCode.INVALID_TOKEN);
@@ -185,54 +198,12 @@ public class AuthService {
         }
 
         // 8. 새로운 Access Token 발급
-        String newAccessToken = jwtTokenProvider.createAccessToken(userId);
+        String newAccessToken = jwtTokenProvider.createAccessToken(user.getId());
 
         log.info("토큰 갱신 성공 - userId: {}", userId);
 
         // Refresh Token은 그대로 사용
-        return new TokenDto(newAccessToken, refreshToken);
+        return new TokenDto(newAccessToken);
     }
 
-    /**
-     * Refresh Token DB 저장
-     * - 기존 토큰 있으면 삭제 후 새로 저장
-     * - 한 유저당 하나의 Refresh Token을 암호화하여 유지 (우선 단일 기기로 설정)
-     */
-    public void saveRefreshToken(User user, String refreshToken) {
-        // Refresh Token 만료 시간 계산
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusSeconds(jwtTokenProvider.getRefreshTokenValidity() / 1000);
-
-        // 기존 토큰 있으면 삭제
-        userTokenRepository.findByUser(user)
-                .ifPresent(userTokenRepository::delete);
-
-        // Refresh Token 암호화 (SHA-256 해시)
-        String hashedRefreshToken = hashRefreshToken(refreshToken);
-
-        // 새 Refresh Token 저장
-        UserToken userToken = UserToken.builder()
-                .user(user)
-                .refreshToken(hashedRefreshToken)
-                .expiresAt(expiresAt)
-                .build();
-
-        userTokenRepository.save(userToken);
-
-        log.debug("Refresh Token 저장 완료 - userId: {}", user.getId());
-    }
-
-    /**
-     * Refresh Token을 SHA-256으로 해시
-     */
-    private String hashRefreshToken(String refreshToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            log.error("SHA-256 알고리즘을 찾을 수 없음", e);
-            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
-    }
 }

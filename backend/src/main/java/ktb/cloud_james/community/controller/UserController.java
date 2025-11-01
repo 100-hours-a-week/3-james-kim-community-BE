@@ -1,5 +1,6 @@
 package ktb.cloud_james.community.controller;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
@@ -36,13 +37,14 @@ public class UserController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<SignUpResponseDto>> signUp(
-            @Valid @RequestBody SignUpRequestDto request) {
+            @Valid @RequestBody SignUpRequestDto request,
+            HttpServletResponse response) {
 
-        SignUpResponseDto response = userService.signUp(request);
+        SignUpResponseDto signUpResponse = userService.signUp(request, response);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(ApiResponse.success("signup_success", response));
+                .body(ApiResponse.success("signup_success", signUpResponse));
     }
 
     /**
@@ -113,9 +115,10 @@ public class UserController {
      */
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> withdrawUser(
-            @AuthenticationPrincipal Long currentUserId) {
+            @AuthenticationPrincipal Long userId,
+            HttpServletResponse response) {
 
-        userService.withdrawUser(currentUserId);
+        userService.withdrawUser(userId, response);
 
         return ResponseEntity
                 .ok(ApiResponse.success("account_deleted", null));
