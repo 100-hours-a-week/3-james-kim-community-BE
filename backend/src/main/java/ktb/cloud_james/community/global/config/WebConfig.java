@@ -2,6 +2,7 @@ package ktb.cloud_james.community.global.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -12,6 +13,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * - 업로드된 이미지 파일을 HTTP로 제공
  */
 @Configuration
+@Profile("dev")
 public class WebConfig implements WebMvcConfigurer {
 
     @Value("${file.temp-dir:uploads/temp}")

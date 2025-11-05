@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: community
+
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/${DB_NAME}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+  mvc:
+    static-path-pattern: /**
+
+  thymeleaf:
+    cache: true  # 개발 중에는 false (배포 시 true로 변경)
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+
+logging:
+  level:
+    root: INFO
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-validity: 3600000 # 10분
+  refresh-token-validity: 604800000 # 7일
+
+# AWS S3 설정 (prod 환경)
+cloud:
+  aws:
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
+    region:
+      static: ${AWS_REGION:ap-northeast-2}
+    s3:
+      bucket: ${S3_BUCKET_NAME}
+      temp-dir: temp
+      upload-dir: images
+
+file:
+  max-size: 5242880
+
+scheduler:
+  view-count-sync:
+    enabled: true
+    fixed-delay: 30000

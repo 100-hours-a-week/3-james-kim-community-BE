@@ -1,14 +1,11 @@
 package ktb.cloud_james.community.service;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import ktb.cloud_james.community.dto.auth.NicknameCheckResponseDto;
 import ktb.cloud_james.community.dto.auth.SignUpRequestDto;
 import ktb.cloud_james.community.dto.auth.SignUpResponseDto;
-import ktb.cloud_james.community.dto.auth.TokenDto;
 import ktb.cloud_james.community.dto.user.*;
 import ktb.cloud_james.community.entity.User;
-import ktb.cloud_james.community.entity.UserToken;
 import ktb.cloud_james.community.global.exception.CustomException;
 import ktb.cloud_james.community.global.exception.ErrorCode;
 import ktb.cloud_james.community.global.security.JwtTokenProvider;
@@ -21,12 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
-import java.util.HexFormat;
 
 
 /**
@@ -88,7 +79,7 @@ public class UserService {
         String finalImageUrl = null;
         String tempImageUrl = request.getProfileImage();
 
-        if (tempImageUrl != null && tempImageUrl.startsWith("/temp/")) {
+        if (tempImageUrl != null && tempImageUrl.contains("/temp/")) {
             try {
                 finalImageUrl = imageService.moveToPermanent(tempImageUrl);
             } catch (Exception e) {
@@ -237,7 +228,7 @@ public class UserService {
             return new UserUpdateResponseDto(userId);
         } catch (Exception e) {
             // 실패 시 새로 이동한 이미지 삭제
-            if (finalImageUrl != null && finalImageUrl.startsWith("/images/")) {
+            if (finalImageUrl != null && finalImageUrl.contains("/images/")) {
                 imageService.deleteFile(finalImageUrl);
                 log.error("회원정보 수정 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
             }
@@ -363,7 +354,7 @@ public class UserService {
         }
 
         // 임시 이미지면 정식 디렉토리로 이동
-        if (requestImageUrl.startsWith("/temp/")) {
+        if (requestImageUrl.contains("/temp/")) {
             try {
                 String finalImageUrl = imageService.moveToPermanent(requestImageUrl);
                 log.info("프로필 이미지 이동 완료 - {} → {}", requestImageUrl, finalImageUrl);

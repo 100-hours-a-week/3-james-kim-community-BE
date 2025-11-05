@@ -41,3 +41,8 @@ out/
 
 ### Environment
 .env
+.env-prod
+
+.application-dev.yml
+.application-prod.yml
+

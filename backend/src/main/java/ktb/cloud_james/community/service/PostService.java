@@ -63,7 +63,7 @@ public class PostService {
         String finalImageUrl = null;
         String tempImageUrl = request.getImageUrl();
 
-        if (tempImageUrl != null && tempImageUrl.startsWith("/temp/")) {
+        if (tempImageUrl != null && tempImageUrl.contains("/temp/")) {
             try {
                 finalImageUrl = imageService.moveToPermanent(tempImageUrl);
                 log.info("게시글 이미지 이동 완료 - {} → {}", tempImageUrl, finalImageUrl);
@@ -254,7 +254,7 @@ public class PostService {
             return new PostUpdateResponseDto(postId);
         } catch (Exception e) {
             // 실패 시 새로 이동한 이미지 삭제
-            if (finalImageUrl != null && finalImageUrl.startsWith("/images/")) {
+            if (finalImageUrl != null && finalImageUrl.contains("/images/")) {
                 imageService.deleteFile(finalImageUrl);
                 log.error("게시글 수정 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
             }
@@ -343,7 +343,7 @@ public class PostService {
         }
 
         // 임시 이미지: 새 이미지로 교체
-        if (requestImageUrl.startsWith("/temp/")) {
+        if (requestImageUrl.contains("/temp/")) {
             log.info("이미지 교체 요청 - postId: {}, tempUrl: {}", post.getId(), requestImageUrl);
 
             // 기존 이미지 Soft Delete
