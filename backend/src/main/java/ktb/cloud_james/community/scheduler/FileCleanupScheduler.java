@@ -2,6 +2,7 @@ package ktb.cloud_james.community.scheduler;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,7 @@ import java.io.File;
  * 임시 파일 정리 스케줄러 (회원가입 중)
  * - 6시간 지난 임시 파일 자동 삭제
  */
+@Profile("dev")
 @Component
 @Slf4j
 public class FileCleanupScheduler {
