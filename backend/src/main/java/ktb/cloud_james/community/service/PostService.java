@@ -33,7 +33,6 @@ public class PostService {
     private final PostLikeRepository postLikeRepository;
     private final CommentRepository commentRepository;
     private final UserRepository userRepository;
-    private final ImageService imageService;
     private final ViewCountCacheService viewCountCacheService;
 
     private static final int DEFAULT_PAGE_SIZE = 20; // 최초 기본 페이지 크기
@@ -59,19 +58,8 @@ public class PostService {
                     return new CustomException(ErrorCode.USER_NOT_FOUND);
         });
 
-        // 2. 임시 이미지 → 정식 디렉토리 이동
-        String finalImageUrl = null;
-        String tempImageUrl = request.getImageUrl();
-
-        if (tempImageUrl != null && tempImageUrl.contains("/temp/")) {
-            try {
-                finalImageUrl = imageService.moveToPermanent(tempImageUrl);
-                log.info("게시글 이미지 이동 완료 - {} → {}", tempImageUrl, finalImageUrl);
-            } catch (Exception e) {
-                log.error("게시글 이미지 이동 실패 - tempUrl: {}", tempImageUrl, e);
-                throw new CustomException(ErrorCode.IMAGE_UPLOAD_FAILED);
-            }
-        }
+        // 2. 이미지 URL 그대로 사용 (Lambda가 반환한 CloudFront URL)
+        String imageUrl = request.getImageUrl();
 
         try {
             // 3. Post 엔티티 생성 및 저장
@@ -90,25 +78,22 @@ public class PostService {
             log.info("게시글 통계 초기화 완료 - postId: {}", savedPost.getId());
 
             // 5. PostImage 생성 및 저장 (이미지가 있는 경우에만)
-            if (finalImageUrl != null) {
+            if (imageUrl != null && !imageUrl.isEmpty()) {
                 PostImage postImage = PostImage.builder()
                         .post(savedPost)
-                        .imageUrl(finalImageUrl)
+                        .imageUrl(imageUrl)
                         .imageOrder(0)
-                        .isMain(true) // 현재는 이미지 1개만 지원해서! -> 다중지원일 경우 로직 변화 필요
+                        .isMain(true)
                         .build();
 
                 postImageRepository.save(postImage);
-                log.info("게시글 이미지 저장 완료 - postId: {}, imageUrl: {}", savedPost.getId(), finalImageUrl);
+                log.info("게시글 이미지 저장 완료 - postId: {}, imageUrl: {}",
+                        savedPost.getId(), imageUrl);
             }
 
             return new PostCreateResponseDto(savedPost.getId());
         } catch (Exception e) {
-            // DB 저장 실패 시 이미지 삭제 (Best Effort)
-            if (finalImageUrl != null) {
-                imageService.deleteFile(finalImageUrl);
-                log.error("게시글 작성 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
-            }
+            log.error("게시글 작성 실패");
             throw e;
         }
     }
@@ -241,23 +226,19 @@ public class PostService {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
-        // 3. 이미지 처리
-        String finalImageUrl = handleImageUpdate(post, request.getImageUrl());
+        // 3. 이미지 URL 처리 (Lambda URL 그대로)
+        String imageUrl = handleImageUpdate(post, request.getImageUrl());
 
         try {
 
             // 4. 게시글 업데이트 시도
-            updatePostFields(post, request, finalImageUrl);
+            updatePostFields(post, request, imageUrl);
 
             log.info("게시글 수정 완료 - postId: {}", postId);
 
             return new PostUpdateResponseDto(postId);
         } catch (Exception e) {
-            // 실패 시 새로 이동한 이미지 삭제
-            if (finalImageUrl != null && finalImageUrl.contains("/images/")) {
-                imageService.deleteFile(finalImageUrl);
-                log.error("게시글 수정 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
-            }
+            log.error("게시글 수정 실패");
             throw e;
         }
     }
@@ -328,6 +309,12 @@ public class PostService {
         log.info("게시글 삭제 완료 - postId: {}", postId);
     }
 
+    /**
+     * 이미지 처리 로직 (Lambda URL 기반)
+     * - null: 이미지 수정 안 함 → null 반환
+     * - "": 이미지 삭제 → "" 반환
+     * - "https://...": Lambda가 반환한 CloudFront URL → 그대로 반환
+     */
     private String handleImageUpdate(Post post, String requestImageUrl) {
         // null: 이미지 수정 안 함
         if (requestImageUrl == null) {
@@ -342,33 +329,19 @@ public class PostService {
             return ""; // 빈 문자열을 반환하여 삭제 표시
         }
 
-        // 임시 이미지: 새 이미지로 교체
-        if (requestImageUrl.contains("/temp/")) {
-            log.info("이미지 교체 요청 - postId: {}, tempUrl: {}", post.getId(), requestImageUrl);
+        // Lambda가 반환한 CloudFront URL 그대로 사용
+        log.info("이미지 교체 요청 - postId: {}, imageUrl: {}", post.getId(), requestImageUrl);
 
-            // 기존 이미지 Soft Delete
-            softDeletePostImage(post.getId());
+        // 기존 이미지 Soft Delete
+        softDeletePostImage(post.getId());
 
-            // 새 이미지를 정식 디렉토리로 이동
-            try {
-                String newImageUrl = imageService.moveToPermanent(requestImageUrl);
-                log.info("이미지 이동 완료 - {} → {}", requestImageUrl, newImageUrl);
-                return newImageUrl;
-            } catch (Exception e) {
-                log.error("이미지 이동 실패 - tempUrl: {}", requestImageUrl, e);
-                throw new CustomException(ErrorCode.IMAGE_UPLOAD_FAILED);
-            }
-        }
-
-        // 그 외의 경우: 무시
-        log.warn("잘못된 이미지 URL - postId: {}, imageUrl: {}", post.getId(), requestImageUrl);
-        throw new CustomException(ErrorCode.INVALID_REQUEST);
+        return requestImageUrl;
     }
 
     /**
      * 게시글 필드 업데이트
      */
-    private void updatePostFields(Post post, PostUpdateRequestDto request, String finalImageUrl) {
+    private void updatePostFields(Post post, PostUpdateRequestDto request, String imageUrl) {
         // 제목 수정
         if (request.getTitle() != null) {
             post.updateTitle(request.getTitle());
@@ -382,20 +355,20 @@ public class PostService {
         }
 
         // 이미지 처리
-        if (finalImageUrl != null) {
-            if (finalImageUrl.isEmpty()) {
+        if (imageUrl != null) {
+            if (imageUrl.isEmpty()) {
                 // 이미지 삭제됨 (이미 Soft Delete 완료)
                 log.debug("이미지 삭제 완료 - postId: {}", post.getId());
             } else {
                 // 새 이미지 저장
                 PostImage newImage = PostImage.builder()
                         .post(post)
-                        .imageUrl(finalImageUrl)
+                        .imageUrl(imageUrl)
                         .imageOrder(0)
                         .isMain(true)
                         .build();
                 postImageRepository.save(newImage);
-                log.debug("새 이미지 저장 완료 - postId: {}, imageUrl: {}", post.getId(), finalImageUrl);
+                log.debug("새 이미지 저장 완료 - postId: {}, imageUrl: {}", post.getId(), imageUrl);
             }
         }
     }

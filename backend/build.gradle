@@ -45,7 +45,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 
     // AWS SDK for S3
-    implementation 'com.amazonaws:aws-java-sdk-s3:1.12.529'
+//    implementation 'com.amazonaws:aws-java-sdk-s3:1.12.529'
 
     compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'

@@ -39,7 +39,6 @@ public class UserService {
     private final UserTokenRepository userTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final ImageService imageService;
     private final TokenUtil tokenUtil;
 
     /**
@@ -75,18 +74,8 @@ public class UserService {
         // 4. 비밀번호 암호화
         String encodedPassword = passwordEncoder.encode(request.getPassword());
 
-        // 5. 임시 이미지 -> 정식 디렉토리 이동
-        String finalImageUrl = null;
-        String tempImageUrl = request.getProfileImage();
-
-        if (tempImageUrl != null && tempImageUrl.contains("/temp/")) {
-            try {
-                finalImageUrl = imageService.moveToPermanent(tempImageUrl);
-            } catch (Exception e) {
-                log.error("이미지 이동 실패 - tempUrl: {}", tempImageUrl, e);
-                throw new CustomException(ErrorCode.IMAGE_UPLOAD_FAILED);
-            }
-        }
+        // 5. 프로필 이미지 URL 그대로 사용 (Lambda가 반환한 CloudFront URL)
+        String profileImageUrl = request.getProfileImage();
 
         try {
             // 6. User 엔티티 생성 및 저장
@@ -94,7 +83,7 @@ public class UserService {
                     .email(request.getEmail())
                     .password(encodedPassword)
                     .nickname(request.getNickname())
-                    .imageUrl(finalImageUrl)
+                    .imageUrl(profileImageUrl)
                     .build();
 
             User savedUser = userRepository.save(user);
@@ -114,11 +103,7 @@ public class UserService {
             return new SignUpResponseDto(accessToken);
 
         } catch (Exception e) {
-            // DB 저장 실패 시 이미지 삭제 시도 (Best Effort)
-            if (finalImageUrl != null) {
-                imageService.deleteFile(finalImageUrl);
-                log.error("회원가입 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
-            }
+            log.error("회원가입 실패");
             throw e;
         }
     }
@@ -216,22 +201,18 @@ public class UserService {
             }
         }
 
-        // 4. 이미지 처리
-        String finalImageUrl = handleImageUpdate(user, request.getImageUrl());
+        // 4. 이미지 처리 (Lambda URL 그대로)
+        String imageUrl = handleImageUpdate(user, request.getImageUrl());
 
         try {
             // 5. 사용자 정보 업데이트 (JPA Dirty Checking)
-            updateUserFields(user, request, finalImageUrl);
+            updateUserFields(user, request, imageUrl);
 
             log.info("회원정보 수정 완료 - userId: {}", userId);
 
             return new UserUpdateResponseDto(userId);
         } catch (Exception e) {
-            // 실패 시 새로 이동한 이미지 삭제
-            if (finalImageUrl != null && finalImageUrl.contains("/images/")) {
-                imageService.deleteFile(finalImageUrl);
-                log.error("회원정보 수정 실패로 이미지 삭제 - imageUrl: {}", finalImageUrl);
-            }
+            log.error("회원정보 수정 실패");
             throw e;
         }
     }
@@ -316,22 +297,18 @@ public class UserService {
 
         CookieUtil.deleteRefreshTokenCookie(response);
 
-        // 5. 프로필 이미지 삭제
+        // 5. 프로필 이미지는 S3에 그대로 유지
+        //    S3 Lifecycle Policy로 오래된 파일 자동 삭제 관리
         if (user.getImageUrl() != null) {
-            try {
-                imageService.deleteFile(user.getImageUrl());
-                log.info("프로필 이미지 삭제 완료 - userId: {}, imageUrl: {}", userId, user.getImageUrl());
-            } catch (Exception e) {
-                // 이미지 삭제 실패는 치명적이지 않으므로 경고만 로그
-                log.warn("프로필 이미지 삭제 실패 (고아 파일 발생) - userId: {}, imageUrl: {}", userId, user.getImageUrl(), e);
-            }
+            log.info("프로필 이미지 URL 유지 - userId: {}, imageUrl: {}",
+                    userId, user.getImageUrl());
         }
 
         log.info("회원탈퇴 완료 - userId: {}", userId);
     }
 
     /**
-     * 이미지 처리 로직
+     * 이미지 처리 로직 (Lambda URL 기반)
      * - null: 수정 안 함 (기존 이미지 유지) → null 반환
      * - "": 기존 이미지 삭제 → "" 반환 (빈 문자열)
      * - "/temp/...": 새 이미지로 교체 → 이동된 이미지 URL 반환
@@ -344,43 +321,21 @@ public class UserService {
 
         // 빈 문자열이면 기존 이미지 삭제
         if (requestImageUrl.isEmpty()) {
-            // 기존 이미지가 있으면 삭제
-            if (user.getImageUrl() != null) {
-                imageService.deleteFile(user.getImageUrl());
-                log.info("기존 프로필 이미지 삭제 - userId: {}, imageUrl: {}",
-                        user.getId(), user.getImageUrl());
-            }
+            log.info("프로필 이미지 삭제 - userId: {}, 기존 imageUrl: {}",
+                    user.getId(), user.getImageUrl());
             return ""; // 빈 문자열 반환 (이미지 삭제됨)
         }
 
-        // 임시 이미지면 정식 디렉토리로 이동
-        if (requestImageUrl.contains("/temp/")) {
-            try {
-                String finalImageUrl = imageService.moveToPermanent(requestImageUrl);
-                log.info("프로필 이미지 이동 완료 - {} → {}", requestImageUrl, finalImageUrl);
-
-                // 기존 이미지가 있으면 삭제
-                if (user.getImageUrl() != null) {
-                    imageService.deleteFile(user.getImageUrl());
-                    log.info("기존 프로필 이미지 삭제 - imageUrl: {}", user.getImageUrl());
-                }
-
-                return finalImageUrl;
-            } catch (Exception e) {
-                log.error("프로필 이미지 이동 실패 - tempUrl: {}", requestImageUrl, e);
-                throw new CustomException(ErrorCode.IMAGE_UPLOAD_FAILED);
-            }
-        }
-
-        // /temp/로 시작하지 않으면 잘못된 요청
-        log.warn("잘못된 이미지 URL - userId: {}, imageUrl: {}", user.getId(), requestImageUrl);
-        throw new CustomException(ErrorCode.INVALID_REQUEST);
+        // Lambda가 반환한 CloudFront URL 그대로 사용
+        log.info("프로필 이미지 업데이트 - userId: {}, imageUrl: {}",
+                user.getId(), requestImageUrl);
+        return requestImageUrl;
     }
 
     /**
      * 사용자 정보 업데이트
      */
-    private void updateUserFields(User user, UserUpdateRequestDto request, String finalImageUrl) {
+    private void updateUserFields(User user, UserUpdateRequestDto request, String imageUrl) {
         // 닉네임 수정
         if (request.getNickname() != null) {
             user.updateNickname(request.getNickname());
@@ -388,15 +343,15 @@ public class UserService {
         }
 
         // 이미지 처리
-        if (finalImageUrl != null) {
-            if (finalImageUrl.isEmpty()) {
+        if (imageUrl != null) {
+            if (imageUrl.isEmpty()) {
                 // 이미지 삭제
                 user.updateImageUrl(null);
                 log.debug("프로필 이미지 삭제 완료 - userId: {}", user.getId());
             } else {
                 // 새 이미지 저장
-                user.updateImageUrl(finalImageUrl);
-                log.debug("새 프로필 이미지 저장 완료 - userId: {}, imageUrl: {}", user.getId(), finalImageUrl);
+                user.updateImageUrl(imageUrl);
+                log.debug("새 프로필 이미지 저장 완료 - userId: {}, imageUrl: {}", user.getId(), imageUrl);
             }
         }
     }
