@@ -6,7 +6,14 @@ plugins {
 
 group = 'ktb.cloud-james'
 version = '0.0.1-SNAPSHOT'
-description = 'Demo project for Spring Boot'
+
+bootJar {
+    archiveFileName = 'app.jar'
+}
+
+jar {
+    enabled = false  // plain.jar 방지
+}
 
 java {
 	toolchain {
