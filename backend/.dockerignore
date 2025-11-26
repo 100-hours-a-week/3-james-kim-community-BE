@@ -1,5 +1,4 @@
 # Docker 이미지에 포함될 필요 없음 (빌드는 컨테이너 내부에서 수행)
-build/
 .gradle/
 out/
 

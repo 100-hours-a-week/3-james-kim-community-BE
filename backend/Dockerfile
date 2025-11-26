@@ -29,7 +29,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # 빌드 스테이지에서 JAR 파일만 가져다 씀
-COPY backend/build/libs/app.jar app.jar
+COPY build/libs/app.jar app.jar
 
 # 포트 노출 명시
 EXPOSE 8080
