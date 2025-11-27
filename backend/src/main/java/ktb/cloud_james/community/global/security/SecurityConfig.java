@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // 회원가입, 로그인은 누구나 접근 가능
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll() // 회원가입만
                         .requestMatchers(HttpMethod.POST, "/api/images").permitAll() // 이미지 업로드만
                         .requestMatchers(HttpMethod.GET, "/api/posts").permitAll() // 게시글 홈만
