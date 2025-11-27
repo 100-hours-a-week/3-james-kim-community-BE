@@ -160,7 +160,7 @@ jobs:
         env:
           NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
         run: |
-          # ALB ARN
+          # ALB ARN ㅅ
           ALB_ARN=$(aws elbv2 describe-load-balancers \
             --names community-alb \
             --query 'LoadBalancers[0].LoadBalancerArn' \
@@ -191,7 +191,7 @@ jobs:
               --output text)
           fi
           
-          # 트래픽 전환
+          # traffic 전환
           aws elbv2 modify-rule \
             --rule-arn $RULE_ARN \
             --actions Type=forward,TargetGroupArn=$TG_ARN
