@@ -175,7 +175,7 @@ jobs:
           # Rule ARN (Priority 1)
           RULE_ARN=$(aws elbv2 describe-rules \
             --listener-arn $LISTENER_ARN \
-            --query 'Rules[?Priority==`1`].RuleArn' \
+            --query 'Rules[?Priority==`"1"`].RuleArn' \
             --output text)
           
           # Target Group ARN
