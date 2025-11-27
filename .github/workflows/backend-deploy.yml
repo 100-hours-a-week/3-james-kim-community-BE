@@ -1,4 +1,4 @@
-name: Backend deploy
+name: Backend Blue/Green Deploy
 
 on:
   push:
@@ -13,14 +13,14 @@ env:
   ECR_REPOSITORY: backend
 
 jobs:
-  build: # CI: GitHub-hosted
+  build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
         working-directory: ./backend
 
-    outputs: # 빌드 시점 태그를 deploy job으로 전달
+    outputs:
       image_tag: ${{ steps.image-tag.outputs.tag }}
 
     steps:
@@ -53,7 +53,7 @@ jobs:
           chmod +x gradlew
           ./gradlew clean build --no-daemon
 
-      - name: Configure AWS credentials # ECR Configuration
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -76,9 +76,13 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-  deploy: # CD: self-hosted
+  deploy:
     needs: build
     runs-on: self-hosted
+
+    outputs:
+      new_env: ${{ steps.determine-env.outputs.new_env }}
+      old_env: ${{ steps.determine-env.outputs.old_env }}
 
     steps:
       - name: Configure AWS credentials
@@ -92,34 +96,79 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Update image tag in .env
-        env:
-          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-        run: |
-          sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" ~/docker-compose/.env
-
-      - name: Pull latest image and deploy
+      - name: Determine current environment
+        id: determine-env
         run: |
           cd ~/docker-compose
-          docker compose pull
-          docker compose up -d
-
-      - name: Health Check
-        run: |
-          sleep 5
+          CURRENT=$(grep CURRENT_ENV .env | cut -d '=' -f2)
           
-          for i in {1..20}; do
-            if curl -f http://localhost:8080/api/health > /dev/null 2>&1; then
-              echo "Healthy!"
+          if [ "$CURRENT" = "blue" ]; then
+            echo "new_env=green" >> $GITHUB_OUTPUT
+            echo "new_port=8081" >> $GITHUB_OUTPUT
+            echo "old_env=blue" >> $GITHUB_OUTPUT
+            echo "old_port=8080" >> $GITHUB_OUTPUT
+          else
+            echo "new_env=blue" >> $GITHUB_OUTPUT
+            echo "new_port=8080" >> $GITHUB_OUTPUT
+            echo "old_env=green" >> $GITHUB_OUTPUT
+            echo "old_port=8081" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "current: $CURRENT, deploy: $([ "$CURRENT" = "blue" ] && echo "green" || echo "blue")"
+
+      - name: Update image tag
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
+        run: |
+          cd ~/docker-compose
+          
+          if [ "$NEW_ENV" = "blue" ]; then
+            sed -i "s/^BLUE_TAG=.*/BLUE_TAG=$IMAGE_TAG/" .env
+          else
+            sed -i "s/^GREEN_TAG=.*/GREEN_TAG=$IMAGE_TAG/" .env
+          fi
+
+      - name: Deploy new version
+        env:
+          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
+        run: |
+          cd ~/docker-compose
+          docker compose pull backend-$NEW_ENV
+          docker compose up -d backend-$NEW_ENV
+
+      - name: Health check
+        env:
+          NEW_PORT: ${{ steps.determine-env.outputs.new_port }}
+        run: |
+          sleep 10
+          
+          for i in {1..30}; do
+            if curl -f http://localhost:$NEW_PORT/api/health > /dev/null 2>&1; then
+              echo "New version successful!"
               exit 0
             fi
-            echo "⏳ $i/20..."
+            echo "⏳ $i/30..."
             sleep 2
           done
           
-          echo "Failed"
-          docker-compose logs backend --tail 50
+          echo "Health check failed!"
+          docker logs backend-$NEW_ENV --tail 50
           exit 1
+
+      - name: Stop old version
+        env:
+          OLD_ENV: ${{ steps.determine-env.outputs.old_env }}
+        run: |
+          cd ~/docker-compose
+          docker compose stop backend-$OLD_ENV
+
+      - name: Update current environment
+        env:
+          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
+        run: |
+          cd ~/docker-compose
+          sed -i "s/CURRENT_ENV=.*/CURRENT_ENV=$NEW_ENV/" .env
 
       - name: Clean up old images
         if: success()
