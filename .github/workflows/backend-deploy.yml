@@ -101,8 +101,8 @@ jobs:
       - name: Pull latest image and deploy
         run: |
           cd ~/docker-compose
-          docker-compose pull
-          docker-compose up -d
+          docker compose pull
+          docker compose up -d
 
       - name: Health Check
         run: |
