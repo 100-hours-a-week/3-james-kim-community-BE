@@ -3,7 +3,7 @@ name: Backend Blue/Green Deploy
 on:
   push:
     branches:
-      - main
+      - feature/remove-image-upload
     paths:
       - 'backend/**'
       - '.github/workflows/backend-deploy.yml'
