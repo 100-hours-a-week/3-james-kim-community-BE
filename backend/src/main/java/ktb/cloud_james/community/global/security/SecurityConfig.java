@@ -89,8 +89,11 @@ public class SecurityConfig {
 
         // 허용할 Origin
         configuration.setAllowedOrigins(List.of(
-                "http://ec2-43-200-174-164.ap-northeast-2.compute.amazonaws.com:3000",
-                "http://localhost:3000"));
+                "http://localhost:3000",  // 로컬 개발
+                "http://jmin-community.store",  // 프로덕션
+                "https://jmin-community.store",  // 프로덕션
+                "https://www.jmin-community.store"  // www 서브도메인
+        ));
 
         // 허용할 HTTP 메서드
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));

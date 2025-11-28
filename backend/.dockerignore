@@ -1,0 +1,62 @@
+# Docker 이미지에 포함될 필요 없음 (빌드는 컨테이너 내부에서 수행)
+.gradle/
+out/
+
+# Gradle 래퍼 배치 스크립트
+gradlew.bat
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# Git 히스토리 (~10-50MB)는 이미지에 불필요
+.git/
+.gitignore
+.gitattributes
+
+# 로그 파일
+logs/
+*.log
+log/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# 임시 파일
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# 재귀방지
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# 환경 변수
+.env
+.env.*
+*.env
+
+# S3 사용하므로 로컬 업로드 파일은 이미지에 불필요
+uploads/
+temp/
+
+# 테스트 결과
+**/test-results/
+**/reports/
+
+# QueryDSL 생성 파일
+**/generated/
+src/main/generated/
