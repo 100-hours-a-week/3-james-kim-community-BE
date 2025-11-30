@@ -91,6 +91,7 @@ jobs:
   deploy: # Private Subnet: Self-hosted Runner
     needs: build
     runs-on: self-hosted
+    if: github.event_name == 'push' # PR Deploy X
 
     outputs:
       new_env: ${{ steps.determine-env.outputs.new_env }}
