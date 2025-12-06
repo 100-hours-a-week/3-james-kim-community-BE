@@ -1,15 +1,15 @@
-name: Backend Blue/Green Deploy
+name: Backend ECS Fargate Deploy
 
 on:
   push:
     branches:
-      - feature/remove-image-upload
+      - develop
     paths:
       - 'backend/**'
       - '.github/workflows/backend-deploy.yml'
   pull_request:
     branches:
-      - feature/remove-image-upload
+      - develop
     paths:
       - 'backend/**'
       - '.github/workflows/backend-deploy.yml'
@@ -17,6 +17,9 @@ on:
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: backend
+  ECS_CLUSTER: community-backend-cluster
+  ECS_SERVICE: community-backend-service
+  ECS_TASK_DEFINITION: community-backend-task
 
 jobs:
   build: # Test and Build Job
@@ -88,14 +91,10 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-  deploy: # Private Subnet: Self-hosted Runner
+  deploy:
     needs: build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event_name == 'push' # PR Deploy X
-
-    outputs:
-      new_env: ${{ steps.determine-env.outputs.new_env }}
-      old_env: ${{ steps.determine-env.outputs.old_env }}
 
     steps:
       # AWS Credentials for Modifying ALB Role
@@ -106,134 +105,63 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # For Image Full in Private EC2
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Blue <-> Green
-      - name: Determine current environment
-        id: determine-env
+      - name: Download current task definition
         run: |
-          cd ~/docker-compose
-          CURRENT=$(grep CURRENT_ENV .env | cut -d '=' -f2)
-          
-          if [ "$CURRENT" = "blue" ]; then
-            echo "new_env=green" >> $GITHUB_OUTPUT
-            echo "new_port=8081" >> $GITHUB_OUTPUT
-            echo "old_env=blue" >> $GITHUB_OUTPUT
-            echo "old_port=8080" >> $GITHUB_OUTPUT
-          else
-            echo "new_env=blue" >> $GITHUB_OUTPUT
-            echo "new_port=8080" >> $GITHUB_OUTPUT
-            echo "old_env=green" >> $GITHUB_OUTPUT
-            echo "old_port=8081" >> $GITHUB_OUTPUT
-          fi
-          
-          echo "current: $CURRENT, deploy: $([ "$CURRENT" = "blue" ] && echo "green" || echo "blue")"
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+            --query taskDefinition > task-definition.json
 
-      # Update New Image tag in .env
-      - name: Update image tag
+      - name: Update task definition with new image
         env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
         run: |
-          cd ~/docker-compose
+          cat task-definition.json | \
+            jq --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            '.containerDefinitions[0].image = $IMAGE' | \
+            jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            > new-task-definition.json
           
-          if [ "$NEW_ENV" = "blue" ]; then
-            sed -i "s/^BLUE_TAG=.*/BLUE_TAG=$IMAGE_TAG/" .env
-          else
-            sed -i "s/^GREEN_TAG=.*/GREEN_TAG=$IMAGE_TAG/" .env
-          fi
+          cat new-task-definition.json
 
-      # New version -> Container restart
-      - name: Deploy new version
-        env:
-          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
+      - name: Register new task definition
+        id: register-task-def
         run: |
-          cd ~/docker-compose
-          docker compose pull backend-$NEW_ENV
-          docker compose up -d backend-$NEW_ENV
-
-      - name: Health check
-        env:
-          NEW_PORT: ${{ steps.determine-env.outputs.new_port }}
-          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
-        run: |
-          sleep 10
-          
-          for i in {1..20}; do
-            if curl -f http://localhost:$NEW_PORT/api/health > /dev/null 2>&1; then
-              echo "New version successful!"
-              exit 0
-            fi
-            echo "$i/20..."
-            sleep 2
-          done
-          
-          echo "Health check failed!"
-          docker logs backend-$NEW_ENV --tail 50
-          exit 1
-
-      # ALB Traffic (Blue <-> Green)
-      # Using TG of Listener Rule
-      - name: Switch ALB traffic
-        env:
-          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
-        run: |
-          # ALB ARN
-          ALB_ARN=$(aws elbv2 describe-load-balancers \
-            --names community-alb \
-            --query 'LoadBalancers[0].LoadBalancerArn' \
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
             --output text)
           
-          # Listener ARN (HTTP:443)
-          LISTENER_ARN=$(aws elbv2 describe-listeners \
-            --load-balancer-arn $ALB_ARN \
-            --query 'Listeners[?Port==`443`].ListenerArn' \
-            --output text)
-          
-          # Rule ARN (Priority 1: Backend /api/*)
-          RULE_ARN=$(aws elbv2 describe-rules \
-            --listener-arn $LISTENER_ARN \
-            --query 'Rules[?Priority==`"1"`].RuleArn' \
-            --output text)
-          
-          # Target Group ARN
-          if [ "$NEW_ENV" = "green" ]; then
-            TG_ARN=$(aws elbv2 describe-target-groups \
-              --names community-backend-green-tg \
-              --query 'TargetGroups[0].TargetGroupArn' \
-              --output text)
-          else
-            TG_ARN=$(aws elbv2 describe-target-groups \
-              --names community-backend-tg \
-              --query 'TargetGroups[0].TargetGroupArn' \
-              --output text)
-          fi
-          
-          # switch traffic 
-          aws elbv2 modify-rule \
-            --rule-arn $RULE_ARN \
-            --actions Type=forward,TargetGroupArn=$TG_ARN
-          
-          sleep 5
+          echo "task-def-arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          echo "New task definition: $TASK_DEF_ARN"
 
-      - name: Stop old version
-        env:
-          OLD_ENV: ${{ steps.determine-env.outputs.old_env }}
+      - name: Deploy to ECS Fargate (Rolling Update)
         run: |
-          cd ~/docker-compose
-          docker compose stop backend-$OLD_ENV
-
-      # update in .env
-      - name: Update current environment
-        env:
-          NEW_ENV: ${{ steps.determine-env.outputs.new_env }}
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ steps.register-task-def.outputs.task-def-arn }} \
+            --force-new-deployment
+          
+      - name: Wait for service stability
         run: |
-          cd ~/docker-compose
-          sed -i "s/CURRENT_ENV=.*/CURRENT_ENV=$NEW_ENV/" .env
+          echo "Waiting for service to become stable..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }}
+          
+          echo "Deployment successful!"
 
-      - name: Clean up old images
-        if: success()
-        run: docker image prune -f
+      - name: Verify deployment
+        run: |
+          echo "=== Running Tasks ==="
+          aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_SERVICE }} \
+            --desired-status RUNNING
+          
+          echo "=== Service Status ==="
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query 'services[0].[serviceName, status, runningCount, desiredCount]'
