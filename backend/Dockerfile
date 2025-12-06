@@ -28,6 +28,8 @@ FROM eclipse-temurin:21-jre-alpine
 # Work Directory
 WORKDIR /app
 
+RUN apk add --no-cache curl
+
 # 빌드 스테이지에서 JAR 파일만 가져다 씀
 COPY build/libs/app.jar app.jar
 
