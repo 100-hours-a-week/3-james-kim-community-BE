@@ -17,7 +17,7 @@ public class HealthController {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "UP");
         response.put("service", "community-backend");
-        response.put("version", "v1.2");
+        response.put("version", "v1.3");
         response.put("timestamp", System.currentTimeMillis());
 
         return ResponseEntity.ok(response);
