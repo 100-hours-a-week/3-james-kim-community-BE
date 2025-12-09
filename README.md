@@ -103,24 +103,32 @@ src/main/java/ktb/cloud_james/community/
 
 ---
 
-### 아래 내용들은 추후 조금 더 보완 예정..
-   
 ## 주요 기능
 ### 1️⃣ 인증 & 보안
 - JWT 기반 Stateless 이중 토큰 인증 시스템 구현
    - 적용 배경: 분산 환경에서의 확장성을 고려하여 세션 방식 대신 JWT 방식 채택
+   - Spring Security + Custom Filter를 통한 요청 인증
+   - Refresh Token 화이트리스트 관리로 탈취 리스크 최소화
 
 ### 2️⃣ 성능 최적화
 - 조회수 캐싱 시스템 (In-Memory Cache)
    - 적용 배경: 게시글 조회 시마다 잦은 DB 업데이트로 인한 부하 발생
+   - `ConcurrentHashMap` + `AtomicLong` 기반 Thread-safe 캐싱
 - QueryDSL 기반 N+1 문제 해결
    - 적용 배경: JPA의 지연 로딩으로 인한 반복 쿼리 발생
+   - 게시글/댓글 목록 조회 시 JOIN 최적화 (N+1 → 1 쿼리)
+   - Cursor 기반 무한 스크롤 페이징 구현
 
 ### 3️⃣ 인프라 & DevOps
 - 컨테이너 기반 아키텍처
    - 적용 배경: EC2 기반 배포의 확장성 한계 및 운영 복잡도 증가
+   - ECS Fargate + ALB를 통한 무중단 Rolling 배포
+   - Auto Scaling으로 트래픽 변화 자동 대응
+   - Private Subnet 격리로 보안 강화 (RDS, ECS)
 - CI/CD 파이프라인 구축
-   - 적용 배경: 배포 속도 개선 및 휴먼 에러 방지, 무중단 배포가 현대에는 거의 필수적
+   - 적용 배경: 배포 속도 개선 및 휴먼 에러 방지, 무중단 배포가 현대에는 거의 필수적\
+   - GitHub Actions 기반 빌드/테스트/배포 자동화
+   - ECR 중앙 이미지 관리 및 버전별 롤백 지원
 
 ---
 
@@ -229,16 +237,19 @@ src/main/java/ktb/cloud_james/community/
    - Gradle 의존성 캐시 레이어 분리 및 JRE 경량화
    - 이미지 크기 약 40% 이상 감소
 
-- Phase 2: CI/CD 워크플로우 분리
-   - GitHub Actions `actions/cache`로 의존성 캐싱
-   - Dockerfile과 워크플로우 역할 분리로 중복 제거
+- Phase 2: CI/CD 워크플로우 분리 및 캐싱 전략
+   - CI 단계: GitHub Actions `actions/cache`로 Gradle 의존성 캐싱
+   - CD 단계: ECR 푸시 및 배포 분리
+   - Dockerfile과 워크플로우 역할 분리로 캐싱 중복 제거
 
-- Phase 3: Self-hosted Runner 도입
-   - Private Subnet 리소스 접근 방식 및 ECR Layer Caching 최적화
-   - GitHub 호스팅 대비 빌드 성능 2배 향상
+- Phase 3: Private Subnet 배포를 위한 Self-hosted Runner
+   - 문제: GitHub-hosted Runner는 WAS Private Subnet 내 접근 불가 
+   - 해결: Private Subnet EC2에 Self-hosted Runner 구축
+      - VPC 내부에서 CD 작업 수행으로 네트워크 경로 단축
+      - ECR Layer Caching 효과 극대화 (동일 VPC 내부 통신)
 
-- Phase 4: ECS Fargate 통합
-   - Self-hosted Runner 제거 및 인프라 단순화
+- Phase 4: ECS Fargate 통합으로 파이프라인 단순화
+   - Self-hosted Runner 제거 (ECS가 Private Subnet에서 테스크 직접 실행)
    - ECS Service Rolling Update로 무중단 배포 자동화
 
 **성과**
@@ -253,3 +264,9 @@ src/main/java/ktb/cloud_james/community/
 ---
 
 ## 프로젝트 회고
+이 프로젝트를 통해 "좋은 기술"이 아닌 "적합한 기술"을 선택하는 기준을 세울 수 있었습니다. Redis, Kubernetes 같은 검증된 기술들도 고려했지만, 현재 규모에서는 In-Memory 캐싱과 ECS Fargate가 더 적합하다고 판단했습니다.     
+다만, 실제로 ECS Task를 다중으로 운영하며 분산 환경에서 인메모리 캐싱의 한계를 직접 경험했습니다. 각 Task가 독립적인 캐시를 가지면서 조회수 동기화에 오차가 발생했고, 데이터 정합성에 큰 문제가 있는 것은 아니지만, 이를 통해 초기 단계에서도 상태 공유가 필요한 데이터는 Redis 같은 중앙 집중식 캐시가 필요하다는 것을 깨달았습니다. 기술 선택은 현재에 적합해야 하지만, 실제 운영 환경에서 발생하는 문제를 통해 다음 단계의 필요성을 미리 파악할 수 있었습니다.
+     
+모든 선택에는 Trade-off가 있었습니다. ECS Fargate는 비용이 높지만 운영 부담을 줄이고, JWT는 복잡하지만 확장성이 뛰어납니다. 단순히 성능이나 비용 하나만 보는 것이 아니라, 현재 요구사항과 미래 확장성의 균형을 고려하는 의사결정 능력을 기를 수 있었습니다.
+     
+또한 점진적 개선의 가치를 체감했습니다. EC2 → ECS Fargate로 이어지는 인프라 진화뿐만 아니라, 기본 구조 → 성능 최적화 → 비용 효율화 → 모니터링까지 단계적으로 확장하며, 처음부터 완벽할 필요는 없으며 각 단계에서 병목을 찾고 개선하는 것이 더 견고한 시스템을 만든다는 것을 배웠습니다.
